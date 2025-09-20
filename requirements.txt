@@ -1,0 +1,14 @@
+# Inventory System Requirements
+# Core web framework for creating desktop app with web UI
+pywebview>=4.0.0
+
+# PDF generation with barcode support
+reportlab>=3.6.0
+
+# Note: The following modules are part of Python's standard library and don't need to be installed:
+# - os (operating system interface)
+# - sqlite3 (SQLite database)
+# - random (random number generation)
+# - string (string operations)
+# - time (time-related functions)
+# - datetime (date and time handling)

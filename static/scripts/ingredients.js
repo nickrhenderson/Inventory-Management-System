@@ -1,0 +1,459 @@
+// Ingredient management functionality for the inventory system
+
+/**
+ * Display ingredients details in the right panel
+ * @param {Array} ingredients - Array of ingredient data
+ */
+function displayIngredientsDetails(ingredients) {
+    const rightContainer = document.getElementById('rightBoxContent');
+    const totalContainer = document.getElementById('ingredientsTotalFixed');
+    
+    if (!ingredients || ingredients.length === 0) {
+        rightContainer.innerHTML = `
+            <div class="empty-state-message">
+                <h3>No Ingredients Found</h3>
+                <p>This product does not have any ingredients assigned to it.</p>
+            </div>
+        `;
+        totalContainer.innerHTML = '';
+        totalContainer.style.display = 'none';
+        
+        // Show title indicating a product is selected but has no ingredients
+        updateIngredientsTitle('Product Ingredients', false);
+        return;
+    }
+    
+    const { ingredientsHTML, totalCost } = createIngredientsDetailsHTML(ingredients, false); // Don't show delete button for product ingredients
+    
+    rightContainer.innerHTML = ingredientsHTML;
+    
+    // Show title indicating a product is selected with ingredients
+    updateIngredientsTitle('Product Ingredients', false);
+    
+    // Display total cost in fixed bottom section
+    totalContainer.innerHTML = `<h4>Total Ingredients Cost: ${formatCurrency(totalCost)}</h4>`;
+    totalContainer.style.display = 'flex';
+}
+
+/**
+ * Create HTML for ingredients details
+ * @param {Array} ingredients - Array of ingredient data
+ * @param {boolean} showDeleteButton - Whether to show delete button
+ * @returns {Object} Object containing ingredientsHTML and totalCost
+ */
+function createIngredientsDetailsHTML(ingredients, showDeleteButton = false) {
+    let ingredientsHTML = '<div class="ingredients-list">';
+    let totalCost = 0;
+    
+    ingredients.forEach(ingredient => {
+        const cost = parseFloat(ingredient.total_ingredient_cost);
+        totalCost += cost;
+        
+        const isFlagged = ingredient.is_flagged === 1;
+        const flaggedClass = isFlagged ? ' flagged' : '';
+        const flaggedButtonClass = isFlagged ? ' flagged' : '';
+        
+        ingredientsHTML += createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedButtonClass, cost, showDeleteButton);
+    });
+    
+    ingredientsHTML += '</div>';
+    
+    return { ingredientsHTML, totalCost };
+}
+
+/**
+ * Create HTML for a single ingredient item
+ * @param {Object} ingredient - Ingredient data
+ * @param {boolean} isFlagged - Whether ingredient is flagged
+ * @param {string} flaggedClass - CSS class for flagged state
+ * @param {string} flaggedButtonClass - CSS class for flagged button
+ * @param {number} cost - Ingredient cost
+ * @param {boolean} showDeleteButton - Whether to show delete button
+ * @returns {string} HTML for ingredient item
+ */
+function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedButtonClass, cost, showDeleteButton = false) {
+    const purchaseDate = formatDate(ingredient.purchase_date);
+    const expirationDate = formatDate(ingredient.expiration_date);
+    
+    // Create delete button HTML only if showDeleteButton is true
+    const deleteButtonHTML = showDeleteButton ? `
+        <button class="ingredient-delete-button" 
+                onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}')"
+                title="Delete Ingredient">
+            <div class="delete-icon">
+                <img src="static/img/svg/trash.svg" alt="Delete" />
+            </div>
+        </button>
+    ` : '';
+    
+    return `
+        <div class="ingredient-item${flaggedClass}" data-ingredient-id="${ingredient.id}">
+            <div class="ingredient-actions">
+                <button class="ingredient-flag-button${flaggedButtonClass}" 
+                        onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
+                        title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
+                    <div class="flag-icon">
+                        <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
+                        </svg>
+                    </div>
+                </button>
+                ${deleteButtonHTML}
+            </div>
+            <div class="ingredient-header">
+                <strong>${ingredient.name}</strong>
+            </div>
+            <div class="ingredient-barcode">
+                <span class="label">Barcode ID:</span>
+                <span class="value barcode-id">${ingredient.barcode_id}</span>
+            </div>
+            <div class="ingredient-details">
+                <div class="ingredient-amount">
+                    <span class="label">Amount Used:</span>
+                    <span class="value">${ingredient.quantity_used} grams</span>
+                </div>
+                <div class="ingredient-cost">
+                    <span class="label">Cost:</span>
+                    <span class="value">${formatCurrency(cost)}</span>
+                </div>
+                <div class="ingredient-dates">
+                    <div>
+                        <span class="label">Purchase Date:</span>
+                        <span class="value">${purchaseDate}</span>
+                    </div>
+                    <div>
+                        <span class="label">Expiration:</span>
+                        <span class="value expiration-date">${expirationDate}</span>
+                    </div>
+                </div>
+                <div class="ingredient-supplier">
+                    <span class="label">Supplier:</span>
+                    <span class="value">${ingredient.supplier}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Display all available ingredients in the inventory
+ */
+async function displayAllIngredients() {
+    const rightContainer = document.getElementById('rightBoxContent');
+    const totalContainer = document.getElementById('ingredientsTotalFixed');
+    
+    try {
+        rightContainer.innerHTML = createLoadingHTML('Loading all ingredients...');
+        
+        await waitForPywebview();
+        const allIngredients = await pywebview.api.get_all_ingredients();
+        
+        if (!allIngredients || allIngredients.length === 0) {
+            displayNoIngredientsMessage(rightContainer, totalContainer);
+            return;
+        }
+        
+        const ingredientsHTML = createAllIngredientsHTML(allIngredients);
+        rightContainer.innerHTML = ingredientsHTML;
+        
+        // Show fixed title for all ingredients
+        showIngredientsTitle('All Ingredients');
+        
+        // Hide total section for all ingredients view
+        totalContainer.style.display = 'none';
+        
+        // Check if there's an active search and apply it
+        const searchBar = document.querySelector('.search-bar');
+        if (searchBar && searchBar.value.trim()) {
+            // Apply the current search filter to the newly loaded ingredients
+            if (typeof filterIngredientsIfApplicable === 'function') {
+                await filterIngredientsIfApplicable(searchBar.value.trim());
+            }
+        }
+        
+    } catch (error) {
+        console.error(ERROR_MESSAGES.LOAD_INGREDIENTS_FAILED, error);
+        displayIngredientsError(rightContainer, totalContainer);
+    }
+}
+
+/**
+ * Display message when no ingredients are available
+ * @param {HTMLElement} rightContainer - Right container element
+ * @param {HTMLElement} totalContainer - Total container element
+ */
+function displayNoIngredientsMessage(rightContainer, totalContainer) {
+    rightContainer.innerHTML = `
+        <div class="empty-state-message">
+            <h3>No Ingredients Available</h3>
+            <p>Click the + button to add your first ingredient to the inventory.</p>
+        </div>
+    `;
+    totalContainer.style.display = 'none';
+    updateIngredientsTitle('All Ingredients', true);
+}
+
+/**
+ * Display error message for ingredients loading
+ * @param {HTMLElement} rightContainer - Right container element
+ * @param {HTMLElement} totalContainer - Total container element
+ */
+function displayIngredientsError(rightContainer, totalContainer) {
+    rightContainer.innerHTML = `
+        <div style="text-align: center; color: #666; padding: 40px 24px;">
+            <h3>Error Loading Ingredients</h3>
+            <p>Unable to load ingredients. Please try refreshing the page.</p>
+            <button onclick="displayAllIngredients()" style="
+                padding: 10px 20px; 
+                background: #be1d2b; 
+                color: white; 
+                border: none; 
+                border-radius: 5px; 
+                cursor: pointer;
+                margin-top: 10px;
+            ">Retry</button>
+        </div>
+    `;
+    totalContainer.style.display = 'none';
+    hideIngredientsTitle();
+}
+
+/**
+ * Create HTML for all ingredients display
+ * @param {Array} allIngredients - Array of all ingredients
+ * @returns {string} HTML for all ingredients
+ */
+function createAllIngredientsHTML(allIngredients) {
+    let ingredientsHTML = '<div class="ingredients-list all-ingredients">';
+    
+    allIngredients.forEach(ingredient => {
+        const unitCost = parseFloat(ingredient.unit_cost || 0);
+        const isFlagged = ingredient.is_flagged === 1;
+        const flaggedClass = isFlagged ? ' flagged' : '';
+        const flaggedButtonClass = isFlagged ? ' flagged' : '';
+        
+        // Generate barcode display for this ingredient
+        const barcodeDisplay = generateBarcodeDisplay(ingredient.barcode_id);
+        
+        ingredientsHTML += createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedButtonClass, unitCost, barcodeDisplay);
+    });
+    
+    ingredientsHTML += '</div>';
+    return ingredientsHTML;
+}
+
+/**
+ * Create HTML for a single ingredient in all ingredients view
+ * @param {Object} ingredient - Ingredient data
+ * @param {boolean} isFlagged - Whether ingredient is flagged
+ * @param {string} flaggedClass - CSS class for flagged state
+ * @param {string} flaggedButtonClass - CSS class for flagged button
+ * @param {number} unitCost - Unit cost of ingredient
+ * @param {string} barcodeDisplay - HTML for barcode display
+ * @returns {string} HTML for ingredient item
+ */
+function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedButtonClass, unitCost, barcodeDisplay) {
+    const purchaseDate = formatDate(ingredient.purchase_date);
+    const expirationDate = formatDate(ingredient.expiration_date);
+    
+    return `
+        <div class="ingredient-item all-ingredient${flaggedClass}" data-ingredient-id="${ingredient.id}">
+            <div class="ingredient-actions">
+                <button class="ingredient-flag-button${flaggedButtonClass}" 
+                        onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
+                        title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
+                    <div class="flag-icon">
+                        <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
+                        </svg>
+                    </div>
+                </button>
+                <button class="ingredient-delete-button" 
+                        onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}')"
+                        title="Delete Ingredient">
+                    <div class="delete-icon">
+                        <img src="static/img/svg/trash.svg" alt="Delete" />
+                    </div>
+                </button>
+            </div>
+            <div class="ingredient-header">
+                <strong>${ingredient.name}</strong>
+            </div>
+            <div class="ingredient-details">
+                <div class="ingredient-unit-cost">
+                    <span class="label">Unit Cost:</span>
+                    <span class="value">${formatCurrency(unitCost)} per gram</span>
+                </div>
+                <div class="ingredient-dates">
+                    <div>
+                        <span class="label">Purchase Date:</span>
+                        <span class="value">${purchaseDate}</span>
+                    </div>
+                    <div>
+                        <span class="label">Expiration:</span>
+                        <span class="value expiration-date">${expirationDate}</span>
+                    </div>
+                </div>
+                <div class="ingredient-supplier">
+                    <span class="label">Supplier:</span>
+                    <span class="value">${ingredient.supplier || 'N/A'}</span>
+                </div>
+            </div>
+            <div class="ingredient-barcode-display">
+                <div class="barcode-display-container">
+                    <div class="barcode-display">
+                        ${barcodeDisplay}
+                    </div>
+                    <div class="barcode-text">${ingredient.barcode_id}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Show the fixed ingredients title
+ * @param {string} customTitle - Custom title text
+ */
+/**
+ * Update the ingredients box title to reflect current state
+ * @param {string} titleText - The title text to display
+ * @param {boolean} showAddButton - Whether to show the add button
+ */
+function updateIngredientsTitle(titleText = 'Ingredients', showAddButton = true) {
+    const titleTextElement = document.getElementById('ingredientsTitleText');
+    const addButton = document.getElementById('ingredientsAddButton');
+    
+    if (titleTextElement) {
+        titleTextElement.textContent = titleText;
+    }
+    
+    if (addButton) {
+        addButton.style.display = showAddButton ? 'flex' : 'none';
+    }
+}
+
+/**
+ * Hide the ingredients title (legacy function for compatibility)
+ */
+function hideIngredientsTitle() {
+    // This function is kept for compatibility but doesn't need to do anything
+    // since we're now using the consistent box-title structure
+}
+
+/**
+ * Show ingredients title (legacy function for compatibility)
+ * @param {string} customTitle - Custom title text
+ */
+function showIngredientsTitle(customTitle = 'Product Ingredients') {
+    // Convert to new title system
+    if (customTitle === 'All Ingredients') {
+        updateIngredientsTitle('All Ingredients', true);
+    } else {
+        updateIngredientsTitle(customTitle, false);
+    }
+}
+
+/**
+ * Toggle ingredient flag status
+ * @param {number} ingredientId - ID of the ingredient
+ * @param {string} ingredientName - Name of the ingredient
+ * @param {boolean} isCurrentlyFlagged - Current flag status
+ */
+async function toggleIngredientFlag(ingredientId, ingredientName, isCurrentlyFlagged) {
+    const action = isCurrentlyFlagged ? 'unflag' : 'flag';
+    const actionText = isCurrentlyFlagged ? 'remove the flag from' : 'flag';
+    const confirmText = isCurrentlyFlagged ? 'Remove Flag' : 'Flag Ingredient';
+    
+    showConfirmationModal(
+        `${action.charAt(0).toUpperCase() + action.slice(1)} Ingredient`,
+        `Are you sure you want to ${actionText} "${ingredientName}"? This will affect all products containing this ingredient.`,
+        confirmText,
+        isCurrentlyFlagged,
+        async () => {
+            try {
+                let result;
+                if (isCurrentlyFlagged) {
+                    result = await pywebview.api.unflag_ingredient(ingredientId);
+                } else {
+                    result = await pywebview.api.flag_ingredient(ingredientId);
+                }
+                
+                if (result.success) {
+                    // Refresh the current ingredient display
+                    if (window.selectedProductId) {
+                        await loadProductIngredients(window.selectedProductId);
+                    } else {
+                        // If no product is selected, refresh the all ingredients view
+                        await displayAllIngredients();
+                    }
+                    
+                    // Update product table to reflect flagged status
+                    await updateProductTableFlaggedStatus();
+                } else {
+                    throw new Error(result.message || ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
+                }
+            } catch (error) {
+                console.error('Error toggling ingredient flag:', error);
+                alert(ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
+            }
+        }
+    );
+}
+
+/**
+ * Show confirmation modal for deleting an ingredient
+ * @param {number} ingredientId - ID of the ingredient to delete
+ * @param {string} ingredientName - Name of the ingredient
+ */
+async function confirmDeleteIngredient(ingredientId, ingredientName) {
+    showConfirmationModal(
+        'Delete Ingredient',
+        `Are you sure you want to delete "${ingredientName}"? This will permanently remove the ingredient and all its associated product relationships. This action cannot be undone.`,
+        'Delete Ingredient',
+        true, // Use delete styling (red)
+        async () => {
+            try {
+                const result = await pywebview.api.delete_ingredient(ingredientId);
+                
+                if (result.success) {
+                    // Refresh the current ingredient display
+                    if (window.selectedProductId) {
+                        await loadProductIngredients(window.selectedProductId);
+                    } else {
+                        // If no product is selected, refresh the all ingredients view
+                        await displayAllIngredients();
+                    }
+                    
+                    // Update product table to reflect changes
+                    await loadProductsData();
+                } else {
+                    throw new Error(result.message || 'Failed to delete ingredient');
+                }
+            } catch (error) {
+                console.error('Error deleting ingredient:', error);
+                alert('Failed to delete ingredient. Please try again.');
+            }
+        }
+    );
+}
+
+/**
+ * Show loading state in the ingredients panel
+ * @param {string} message - Loading message to display
+ */
+function showIngredientsLoading(message = 'Loading...') {
+    const rightContainer = document.getElementById('rightBoxContent');
+    const totalContainer = document.getElementById('ingredientsTotalFixed');
+    
+    if (rightContainer) {
+        rightContainer.innerHTML = createLoadingHTML(message);
+    }
+    
+    if (totalContainer) {
+        totalContainer.style.display = 'none';
+    }
+    
+    // Set appropriate title for loading state
+    updateIngredientsTitle('Loading...', false);
+}

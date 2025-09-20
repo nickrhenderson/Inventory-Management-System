@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory System</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <script src="static/main.js" defer></script>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+        <button class="top-bar-button refresh-button" onclick="refreshFiles()" title="Refresh">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 3V8M21 8H16M21 8L18 5.29168C16.4077 3.86656 14.3051 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21C16.2832 21 19.8675 18.008 20.777 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <div class="search-container">
+            <input class="search-bar" type="text" placeholder="Search..." autocomplete="off">
+            <div class="search-icon">
+                <img src="static/img/svg/magnifyglass.svg" alt="Search" />
+            </div>
+        </div>
+        <button class="top-bar-button settings-button" onclick="toggleSettings()" title="Settings">
+            <svg width="20" height="20" viewBox="-1 0 19 19" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16.014 8.86v1.44a.587.587 0 0 1-.468.556l-1.182.204a.463.463 0 0 1-.114.006 5.902 5.902 0 0 1-.634 1.528.455.455 0 0 1 .078.084l.691.98a.586.586 0 0 1-.062.725l-1.02 1.02a.586.586 0 0 1-.724.061l-.98-.69a.444.444 0 0 1-.085-.078 5.908 5.908 0 0 1-1.544.637.502.502 0 0 1 0 .175l-.182 1.053a.667.667 0 0 1-.633.532h-1.31a.667.667 0 0 1-.633-.532l-.182-1.053a.495.495 0 0 1 0-.175 5.908 5.908 0 0 1-1.544-.637.444.444 0 0 1-.085.077l-.98.691a.586.586 0 0 1-.725-.062l-1.02-1.02a.586.586 0 0 1-.061-.723l.691-.98a.454.454 0 0 1 .077-.085 5.901 5.901 0 0 1-.633-1.528.466.466 0 0 1-.114-.006l-1.182-.204a.586.586 0 0 1-.468-.556V8.86a.586.586 0 0 1 .468-.556L2.636 8.1a.437.437 0 0 1 .114-.005 5.912 5.912 0 0 1 .633-1.528.466.466 0 0 1-.077-.085l-.691-.98a.587.587 0 0 1 .061-.724l1.02-1.02a.587.587 0 0 1 .725-.062l.98.691a.444.444 0 0 1 .085.078 5.903 5.903 0 0 1 1.528-.634.433.433 0 0 1 .005-.114l.204-1.182a.586.586 0 0 1 .556-.468h1.442a.586.586 0 0 1 .556.468l.204 1.182a.448.448 0 0 1 .005.114 5.908 5.908 0 0 1 1.528.634.444.444 0 0 1 .085-.078l.98-.691a.586.586 0 0 1 .724.062l1.02 1.02a.586.586 0 0 1 .062.724l-.691.98a.467.467 0 0 1-.078.085 5.902 5.902 0 0 1 .634 1.528.434.434 0 0 1 .114.005l1.182.204a.587.587 0 0 1 .468.556zm-4.955.72a2.559 2.559 0 1 0-2.56 2.56 2.559 2.559 0 0 0 2.56-2.56z"/>
+            </svg>
+        </button>
+    </header>
+    
+    <!-- Settings Panel -->
+    <div class="modal-backdrop settings-backdrop" id="settingsBackdrop" onclick="toggleSettings()"></div>
+    <aside class="settings-panel" id="settingsPanel">
+        <button class="close-button" onclick="toggleSettings()" title="Close">×</button>
+        <div class="settings-content">
+            <h3>Settings</h3>
+            
+            <!-- Settings sections can be added here -->
+            <div class="setting-section">
+                <p>Settings panel ready for configuration options.</p>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Main Application Content -->
+    <main class="main">
+        <!-- Products Panel -->
+        <section class="box left">
+            <header class="box-title">
+                Products
+                <button class="box-add-button" onclick="openProductModal()" title="Add Product">
+                    <div class="plus-icon">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 12H18M12 6V18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </button>
+            </header>
+            <div class="inventory-container">
+                <div id="inventoryTable"></div>
+            </div>
+        </section>
+        
+        <!-- Ingredients Panel -->
+        <section class="box right">
+            <header class="box-title" id="ingredientsBoxTitle">
+                <span id="ingredientsTitleText">All Ingredients</span>
+                <button class="box-add-button" id="ingredientsAddButton" onclick="openIngredientModal()" title="Add Ingredient">
+                    <div class="plus-icon">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 12H18M12 6V18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                </button>
+            </header>
+            <div class="ingredients-container">
+                <div id="rightBoxContent"></div>
+            </div>
+            <footer class="ingredients-total-fixed" id="ingredientsTotalFixed"></footer>
+        </section>
+    </main>
+    
+    <!-- Modals -->
+    <!-- Product Creation Modal -->
+    <div class="modal-backdrop creation-modal-backdrop" id="productModalBackdrop" onclick="closeProductModal()">
+        <div class="modal-content creation-modal" id="productModal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeProductModal()" title="Close">×</button>
+            <h3>Add New Product</h3>
+            <form id="productForm">
+                <div class="form-group">
+                    <label for="productName">Product Name:</label>
+                    <input type="text" id="productName" name="productName" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="mixedDate">Mixed Date:</label>
+                    <input type="date" id="mixedDate" name="mixedDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="barcodeScanner">Scan Ingredient Barcode:</label>
+                    <input type="text" id="barcodeScanner" name="barcodeScanner" placeholder="Scan or type barcode..." autocomplete="off">
+                    <div class="barcode-status" id="barcodeStatus"></div>
+                </div>
+                <div class="form-group">
+                    <label for="ingredientSelection">Select Ingredients:</label>
+                    <div class="ingredient-selector" id="ingredientSelector"></div>
+                </div>
+                <div class="selected-ingredients" id="selectedIngredients"></div>
+                <div class="form-actions">
+                    <button type="button" class="modal-button cancel" onclick="closeProductModal()">Cancel</button>
+                    <button type="submit" class="modal-button submit" id="submitProductButton">Add Product</button>
+                </div>
+            </form>
+            <div class="barcode-result" id="barcodeResult" style="display: none;"></div>
+        </div>
+    </div>
+    
+    <!-- Ingredient Creation Modal -->
+    <div class="modal-backdrop creation-modal-backdrop" id="ingredientModalBackdrop" onclick="closeIngredientModal()">
+        <div class="modal-content creation-modal" id="ingredientModal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeIngredientModal()" title="Close">×</button>
+            <h3>Add New Ingredient</h3>
+            <form id="ingredientForm">
+                <div class="form-group">
+                    <label for="ingredientName">Ingredient Name:</label>
+                    <input type="text" id="ingredientName" name="ingredientName" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="ingredientUnitCost">Unit Cost (per gram) ($):</label>
+                    <input type="number" id="ingredientUnitCost" name="ingredientUnitCost" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="ingredientPurchaseDate">Purchase Date:</label>
+                    <input type="date" id="ingredientPurchaseDate" name="ingredientPurchaseDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="ingredientExpirationDate">Expiration Date:</label>
+                    <input type="date" id="ingredientExpirationDate" name="ingredientExpirationDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="ingredientSupplier">Supplier:</label>
+                    <input type="text" id="ingredientSupplier" name="ingredientSupplier" required autocomplete="off">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="modal-button cancel" onclick="closeIngredientModal()">Cancel</button>
+                    <button type="submit" class="modal-button submit" id="submitIngredientButton">Add Ingredient</button>
+                </div>
+            </form>
+            <div class="barcode-result" id="ingredientBarcodeResult" style="display: none;"></div>
+        </div>
+    </div>
+</body>
+</html>

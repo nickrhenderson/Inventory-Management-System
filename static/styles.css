@@ -1,0 +1,1504 @@
+:root {
+    /* Background colors */
+    --bg-primary: #f0f0f0;
+    --bg-white: #fff;
+    --bg-light-gray: #f8f9fa;
+    --bg-lighter-gray: #e9ecef;
+    
+    /* Border colors */
+    --border-gray: #bbb;
+    --border-light-gray: #ddd;
+    --border-table: #eee;
+    
+    /* Text colors */
+    --text-gray: #666;
+    --text-danger: #d32f2f;
+    --text-success: #2e7d32;
+    
+    /* Shadow colors */
+    --shadow-light: #0001;
+    --shadow-medium: #0002;
+    --shadow-dark: rgba(0, 0, 0, 0.1);
+    
+    /* Loading colors */
+    --loading-border: #f3f3f3;
+    --loading-accent: #e63140;
+    --loading-gradient-start: #be1d2b;
+    --loading-gradient-end: #ff9099;
+    
+    /* Hover/interactive colors */
+    --hover-highlight: rgba(204, 0, 0, 0.05);
+    --hover-highlight-strong: rgba(204, 0, 0, 0.15);
+    --backdrop-overlay: rgba(0, 0, 0, 0.1);
+    
+    /* Common dimensions */
+    --button-size: 40px;
+    --border-radius: 50%;
+    --padding-base: 15px;
+}
+
+/* Base styles */
+body {
+    background: var(--bg-primary);
+    margin: 0;
+    font-family: Arial, sans-serif;
+    overflow-x: hidden;
+    padding: 0 var(--padding-base) var(--padding-base) var(--padding-base);
+    box-sizing: border-box;
+    height: 100vh;
+}
+
+/* Common button styles */
+.top-bar-button {
+    position: absolute;
+    background: var(--bg-white);
+    border: 1px solid var(--border-gray);
+    border-radius: var(--border-radius);
+    width: var(--button-size);
+    height: var(--button-size);
+    font-size: 1.2em;
+    cursor: pointer;
+    box-shadow: 0 2px 8px var(--shadow-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.top-bar-button:hover {
+    background-color: var(--bg-light-gray);
+    transform: scale(1.05);
+}
+
+.top-bar-button:active {
+    transform: scale(0.95);
+}
+
+/* Top bar layout */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    height: 80px;
+    background: var(--bg-primary);
+    margin: 0 calc(-1 * var(--padding-base));
+    padding: 0 var(--padding-base);
+}
+
+.refresh-button {
+    left: var(--padding-base);
+}
+
+.settings-button {
+    right: var(--padding-base);
+}
+
+.settings-button svg,
+.refresh-button svg {
+    color: #666;
+    transition: color 0.2s ease;
+}
+
+.settings-button:hover svg,
+.refresh-button:hover svg {
+    color: #444;
+}
+
+/* Common backdrop styles */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    backdrop-filter: blur(5px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Common modal content styles */
+.modal-content {
+    background: var(--bg-white);
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    transform: scale(0.8);
+    transition: transform 0.3s ease-in-out;
+}
+.settings-backdrop {
+    background: var(--backdrop-overlay);
+    z-index: 999;
+}
+.settings-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+.settings-panel {
+    position: fixed;
+    top: 0;
+    left: -80%;
+    width: 80%;
+    height: 100vh;
+    background: var(--bg-white);
+    box-shadow: 2px 0 10px var(--shadow-dark);
+    z-index: 1000;
+    transition: left 0.3s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+}
+.settings-panel.open {
+    left: 0;
+}
+.close-button {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--bg-light-gray);
+    border: 1px solid var(--border-light-gray);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: var(--text-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.1s;
+    z-index: 1001;
+}
+.close-button:hover {
+    background-color: var(--bg-lighter-gray);
+    transform: scale(1.1);
+}
+.close-button:active {
+    transform: scale(0.9);
+}
+.settings-content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+}
+
+/* Settings Styles */
+.setting-section {
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-light-gray);
+    padding-bottom: 20px;
+}
+
+.setting-section:last-child {
+    border-bottom: none;
+}
+
+.setting-section h4 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.setting-item {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.setting-item label {
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 120px;
+}
+
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s ease;
+    transform-origin: center;
+}
+
+.search-bar {
+    width: 350px;
+    font-size: 1.1em;
+    padding: 8px 45px 8px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border-gray);
+    box-shadow: 0 2px 8px var(--shadow-light);
+    transition: box-shadow 0.2s ease;
+    outline: none;
+    height: 40px;
+    box-sizing: border-box;
+}
+
+.search-container:hover {
+    transform: scale(1.05);
+}
+
+.search-container:hover .search-bar {
+    box-shadow: 0 4px 12px var(--shadow-medium);
+}
+
+.search-bar:focus {
+    box-shadow: 0 4px 12px var(--shadow-medium);
+}
+
+.search-container:has(.search-bar:focus) {
+    transform: scale(1.05);
+}
+
+.search-icon {
+    position: absolute;
+    right: 12px;
+    top: 4px;
+    bottom: 4px;
+    width: 20px;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-icon img {
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+    filter: grayscale(1);
+    transition: all 0.2s ease;
+}
+.main {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    height: calc(100vh - 80px - 40px - 15px);
+    gap: 15px;
+    box-sizing: border-box;
+}
+.box {
+    border-radius: 12px;
+    box-shadow: 0 2px 12px var(--shadow-medium);
+    padding: 32px 24px;
+    background: var(--bg-white);
+    min-width: 200px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+}
+.box.left {
+    background: var(--bg-white);
+    border: 1px solid var(--border-gray);
+    width: calc(70% - 7.5px);
+}
+.box.right {
+    background: var(--bg-white);
+    border: 1px solid var(--border-gray);
+    width: calc(30% - 7.5px);
+    padding: 32px 0 0 0;
+    position: relative;
+}
+.box-title {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.box-add-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    border-radius: 4px;
+}
+
+.box-add-button:hover {
+    transform: scale(1.1);
+}
+
+/* Custom plus icon */
+.plus-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.plus-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke: #666;
+    transition: stroke 0.2s ease;
+}
+
+/* Hover effects for plus icon */
+.box-add-button:hover .plus-icon svg {
+    stroke: #444;
+}
+.inventory-container {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+.inventory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    table-layout: fixed;
+}
+.inventory-table th,
+.inventory-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-table);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.inventory-table th:nth-child(1), /* Product Name */
+.inventory-table td:nth-child(1) {
+    width: 22%;
+    text-align: left;
+}
+.inventory-table th:nth-child(2), /* Batch */
+.inventory-table td:nth-child(2) {
+    width: 22%;
+    text-align: left;
+}
+.inventory-table th:nth-child(3), /* Date Mixed */
+.inventory-table td:nth-child(3) {
+    width: 16%;
+    text-align: left;
+}
+.inventory-table th:nth-child(4), /* Total Cost */
+.inventory-table td:nth-child(4) {
+    width: 16%;
+    text-align: right;
+}
+.inventory-table th:nth-child(5), /* Quantity */
+.inventory-table td:nth-child(5) {
+    width: 16%;
+    text-align: left;
+}
+.inventory-table th:nth-child(6), /* Actions */
+.inventory-table td:nth-child(6) {
+    width: 8%;
+    text-align: center;
+}
+.inventory-table th {
+    background-color: var(--bg-light-gray);
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.inventory-table .quantity {
+    text-align: left;
+    font-weight: bold;
+}
+.inventory-table .price {
+    text-align: right;
+    font-family: monospace;
+}
+.low-stock {
+    color: var(--text-danger);
+}
+.good-stock {
+    color: var(--text-success);
+}
+
+/* Loading animations */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--loading-border);
+    border-top: 4px solid var(--loading-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin: 10px 0;
+    color: var(--text-gray);
+    font-weight: 500;
+}
+
+.loading-progress {
+    width: 200px;
+    height: 4px;
+    background-color: var(--bg-primary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 20px;
+}
+
+.loading-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--loading-gradient-start), var(--loading-gradient-end));
+    width: 0%;
+    animation: loadingProgress 2s ease-out forwards;
+    border-radius: 2px;
+}
+
+@keyframes loadingProgress {
+    0% { width: 0%; }
+    50% { width: 70%; }
+    100% { width: 100%; }
+}
+
+/* Row animation styles for initial load */
+.inventory-row-hidden {
+    opacity: 0 !important;
+    transform: translateY(10px) !important;
+    transition: none !important;
+}
+
+.inventory-row-animate-in {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+    transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+/* Animation for search filtering - fade out */
+.inventory-row-fade-out {
+    opacity: 0 !important;
+    transform: scale(0.95) !important;
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+/* Animation for search filtering - fade in */
+.inventory-row-fade-in {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.inventory-row-loaded {
+    background-color: var(--hover-highlight);
+    animation: rowHighlight 0.8s ease-out;
+}
+
+/* Default state for table rows - no transitions initially */
+.inventory-table tbody tr {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    height: auto;
+    overflow: hidden;
+    /* No transition here - will be added per animation type */
+}
+
+/* Enable smooth transitions for table rows during data changes */
+.inventory-table tbody tr:not(.inventory-row-hidden):not(.inventory-row-animate-in) {
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Ensure table cells also transition smoothly during changes */
+.inventory-table tbody tr td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-table);
+}
+
+.inventory-table tbody tr:not(.inventory-row-hidden):not(.inventory-row-animate-in) td {
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes rowHighlight {
+    0% { 
+        background-color: var(--hover-highlight-strong);
+    }
+    100% { 
+        background-color: transparent;
+    }
+}
+
+/* Enhanced table hover effects */
+.inventory-table tbody tr:hover {
+    background-color: var(--bg-light-gray);
+    box-shadow: 0 2px 8px var(--shadow-dark);
+    transition: all 0.2s ease;
+}
+
+/* Default transitions for rows - only apply when not animating in */
+.inventory-table tbody tr:not(.inventory-row-loaded) {
+    transition: all 0.2s ease;
+}
+
+/* Selected product row styling */
+.inventory-table tbody tr.selected-product {
+    background-color: var(--hover-highlight-strong);
+    border-left: 4px solid var(--loading-accent);
+}
+
+.inventory-table tbody tr.selected-product:hover {
+    background-color: var(--hover-highlight-strong);
+}
+
+/* Flagged product row styling */
+.inventory-table tbody tr.flagged-product {
+    background-color: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+.inventory-table tbody tr.flagged-product:hover {
+    background-color: #ffcdd2;
+}
+
+.inventory-table tbody tr.flagged-product.selected-product {
+    background-color: #ffcdd2;
+    border-left: 4px solid #d32f2f;
+}
+
+/* Confirmation modal styles */
+.confirmation-modal-backdrop {
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirmation-modal-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.confirmation-modal {
+    max-width: 400px;
+}
+
+.modal-backdrop.open .modal-content {
+    transform: scale(1);
+}
+
+.confirmation-modal h3 {
+    margin: 0 0 16px 0;
+    color: var(--text-primary);
+    font-size: 1.3em;
+}
+
+.confirmation-modal p {
+    margin: 0 0 24px 0;
+    color: var(--text-gray);
+    line-height: 1.5;
+}
+
+.confirmation-modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.confirmation-modal-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.confirmation-modal-button.cancel {
+    background: var(--bg-light-gray);
+    color: var(--text-gray);
+    border: 1px solid var(--border-light-gray);
+}
+
+.confirmation-modal-button.cancel:hover {
+    background: var(--bg-lighter-gray);
+}
+
+.confirmation-modal-button.cancel:disabled {
+    background: #e0e0e0 !important;
+    color: #999 !important;
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.confirmation-modal-button.confirm {
+    background: #f44336;
+    color: white;
+}
+
+.confirmation-modal-button.confirm:hover {
+    background: #d32f2f;
+}
+
+.confirmation-modal-button.unflag {
+    background: #f44336;
+    color: white;
+}
+
+.confirmation-modal-button.unflag:hover {
+    background: #d32f2f;
+}
+
+.confirmation-modal-button:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.confirmation-modal-button.confirm:disabled {
+    background: #c62828 !important;
+}
+
+.confirmation-modal-button.unflag:disabled {
+    background: #c62828 !important;
+}
+
+/* Product Creation Modal Styles */
+.creation-modal-backdrop {
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2500;
+}
+
+.creation-modal-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.creation-modal {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.modal-close-button {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: var(--bg-light-gray);
+    border: 1px solid var(--border-light-gray);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1.2em;
+    cursor: pointer;
+    color: var(--text-gray);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.modal-close-button:hover {
+    background-color: var(--bg-lighter-gray);
+    transform: scale(1.1);
+}
+
+.creation-modal h3 {
+    margin: 0 0 24px 0;
+    color: var(--text-primary);
+    font-size: 1.4em;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-gray);
+    border-radius: 6px;
+    font-size: 1em;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+    background: var(--bg-white);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--loading-accent);
+}
+
+.ingredient-selector {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-light-gray);
+    border-radius: 6px;
+    padding: 12px;
+    background: var(--bg-light-gray);
+}
+
+.ingredient-option {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: var(--bg-white);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.ingredient-option:hover {
+    background: var(--bg-lighter-gray);
+}
+
+.ingredient-option input[type="checkbox"] {
+    margin-right: 12px;
+}
+
+.selected-ingredients {
+    margin-top: 20px;
+}
+
+.selected-ingredient-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    margin-bottom: 12px;
+    background: var(--bg-light-gray);
+    border-radius: 6px;
+    border-left: 4px solid var(--loading-accent);
+}
+
+.selected-ingredient-info {
+    flex: 1;
+    margin-right: 12px;
+}
+
+.selected-ingredient-quantity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.selected-ingredient-quantity input {
+    width: 80px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-gray);
+    border-radius: 4px;
+    text-align: right;
+}
+
+/* Barcode scanner styles */
+.barcode-status {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.barcode-status.success {
+    background: rgba(46, 125, 50, 0.1);
+    color: var(--text-success);
+    border: 1px solid rgba(46, 125, 50, 0.3);
+}
+
+.barcode-status.error {
+    background: rgba(211, 47, 47, 0.1);
+    color: var(--text-danger);
+    border: 1px solid rgba(211, 47, 47, 0.3);
+}
+
+.barcode-status.info {
+    background: rgba(25, 118, 210, 0.1);
+    color: #1976d2;
+    border: 1px solid rgba(25, 118, 210, 0.3);
+}
+
+.barcode-status:empty {
+    display: none;
+}
+
+#barcodeScanner {
+    position: relative;
+}
+
+#barcodeScanner:focus {
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-light-gray);
+}
+
+.modal-button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    font-size: 1em;
+}
+
+.modal-button.cancel {
+    background: var(--bg-light-gray);
+    color: var(--text-gray);
+    border: 1px solid var(--border-light-gray);
+}
+
+.modal-button.cancel:hover {
+    background: var(--bg-lighter-gray);
+}
+
+.modal-button.submit {
+    background: var(--loading-accent);
+    color: white;
+}
+
+.modal-button.submit:hover {
+    background: #005a9a;
+}
+
+.modal-button.success {
+    background: #4caf50;
+    color: white;
+}
+
+.modal-button.error {
+    background: #f44336;
+    color: white;
+}
+
+.modal-button:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+.modal-button.submit:disabled {
+    background: #666 !important;
+}
+
+.modal-button.success:disabled {
+    background: #2e7d32 !important;
+}
+
+.modal-button.error:disabled {
+    background: #c62828 !important;
+}
+
+.barcode-result {
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--bg-light-gray);
+    border-radius: 6px;
+    text-align: center;
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.barcode-result.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.barcode-result.success {
+    background: #e8f5e8;
+    border-left: 4px solid #4caf50;
+}
+
+.barcode-result.error {
+    background: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+.barcode-text {
+    font-family: 'Courier New', monospace;
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg-white);
+    border-radius: 4px;
+    border: 1px solid var(--border-gray);
+}
+
+/* Ingredients container styling */
+.ingredients-container {
+    height: calc(100% - 80px);
+    overflow-y: auto;
+    padding: 0;
+    width: 100%;
+}
+
+.ingredients-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    padding: 0 24px;
+    box-sizing: border-box;
+}
+
+.ingredient-item {
+    background: var(--bg-light-gray);
+    border-radius: 8px;
+    padding: 16px;
+    border-left: 4px solid var(--loading-accent);
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.ingredient-item.flagged {
+    background: #ffebee;
+    border-left: 4px solid #f44336;
+}
+
+.ingredient-item:last-child {
+    margin-bottom: 60px;
+}
+
+.ingredient-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-light-gray);
+    gap: 8px;
+}
+
+.ingredient-header strong {
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+.ingredient-category {
+    background: var(--loading-accent);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+.ingredient-barcode {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: var(--bg-lighter-gray);
+    border-radius: 6px;
+    border: 1px solid var(--border-light-gray);
+}
+
+.ingredient-barcode .label {
+    color: var(--text-gray);
+    font-weight: 500;
+    font-size: 0.9em;
+}
+
+.ingredient-barcode .barcode-id {
+    color: var(--text-primary);
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    font-size: 0.9em;
+    background: var(--bg-white);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-gray);
+}
+
+.ingredient-flag-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.ingredient-flag-button:hover {
+    transform: scale(1.1);
+}
+
+/* Custom flag design */
+.flag-icon {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flag-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #666;
+    transition: fill 0.2s ease;
+}
+
+/* Flagged state - red flag */
+.ingredient-flag-button.flagged .flag-icon svg {
+    fill: #d32f2f;
+}
+
+/* Hover effects */
+.ingredient-flag-button:hover .flag-icon svg {
+    fill: #444;
+}
+
+.ingredient-flag-button.flagged:hover .flag-icon svg {
+    fill: #b71c1c;
+}
+
+/* Ingredient actions container */
+.ingredient-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+}
+
+.ingredient-flag-button {
+    position: static;
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+/* Delete button styling */
+.ingredient-delete-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.ingredient-delete-button:hover {
+    transform: scale(1.1);
+}
+
+.delete-icon {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-icon img {
+    width: 100%;
+    height: 100%;
+    filter: opacity(0.6);
+    transition: filter 0.2s ease;
+}
+
+.ingredient-delete-button:hover .delete-icon img {
+    filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
+}
+
+/* Product delete button styling */
+.product-actions {
+    text-align: center;
+}
+
+.product-delete-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin: 0 auto;
+}
+
+.product-delete-button:hover {
+    transform: scale(1.1);
+}
+
+.product-delete-button .delete-icon img {
+    width: 18px;
+    height: 18px;
+    filter: opacity(0.6);
+    transition: filter 0.2s ease;
+}
+
+.product-delete-button:hover .delete-icon img {
+    filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
+}
+
+.ingredient-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ingredient-amount,
+.ingredient-cost {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.ingredient-dates {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.ingredient-dates > div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9em;
+}
+
+.ingredient-supplier {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9em;
+    color: var(--text-gray);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light-gray);
+}
+
+.ingredient-details .label {
+    color: var(--text-gray);
+    font-weight: 500;
+}
+
+.ingredient-details .value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.expiration-date {
+    color: var(--text-danger) !important;
+    font-weight: 600 !important;
+}
+
+/* Fixed bottom section for total cost */
+.ingredients-total-fixed {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: var(--bg-lighter-gray);
+    border-top: 2px solid var(--loading-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    box-sizing: border-box;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.ingredients-total-fixed h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+/* Right box content styling */
+#rightBoxContent {
+    height: calc(100% - 0px);
+    overflow-y: auto;
+    margin-top: 0px;
+}
+
+#rightBoxContent h3 {
+    margin: 0 0 20px 0;
+    color: var(--text-primary);
+    text-align: center;
+    padding: 0 24px 10px 24px;
+    border-bottom: 2px solid var(--loading-accent);
+}
+
+/* Additional variables for text colors */
+:root {
+    /* Background colors */
+    --bg-primary: #f0f0f0;
+    --bg-white: #fff;
+    --bg-light-gray: #f8f9fa;
+    --bg-lighter-gray: #e9ecef;
+    
+    /* Border colors */
+    --border-gray: #bbb;
+    --border-light-gray: #ddd;
+    --border-table: #eee;
+    
+    /* Text colors */
+    --text-primary: #333;
+    --text-gray: #666;
+    --text-danger: #d32f2f;
+    --text-success: #2e7d32;
+    
+    /* Shadow colors */
+    --shadow-light: #0001;
+    --shadow-medium: #0002;
+    --shadow-dark: rgba(0, 0, 0, 0.1);
+    
+    /* Loading colors */
+    --loading-border: #f3f3f3;
+    --loading-accent: #007acc;
+    --loading-gradient-start: #007acc;
+    --loading-gradient-end: #4CAF50;
+    
+    /* Hover/interactive colors */
+    --hover-highlight: rgba(29, 43, 0, 0.05);
+    --hover-highlight-strong: rgba(29, 43, 0, 0.15);
+    --backdrop-overlay: rgba(0, 0, 0, 0.1);
+}
+
+/* Barcode Display Styles */
+.barcode-section {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--bg-light-gray);
+    border-radius: 8px;
+    border: 1px solid var(--border-gray);
+}
+
+.printable-barcode {
+    background: white;
+    padding: 15px;
+    border: 2px solid #000;
+    border-radius: 4px;
+    margin: 15px 0;
+    display: inline-block;
+}
+
+.barcode-display {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    height: 80px;
+    margin-bottom: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    padding: 10px;
+    font-family: monospace;
+    overflow-x: auto;
+}
+
+/* UPC-A compliant barcode elements */
+.upc-bar {
+    background: #000;
+    height: 100%;
+    margin: 0;
+    width: 1px; /* Standard UPC module width */
+    flex-shrink: 0;
+}
+
+.upc-space {
+    background: transparent;
+    height: 100%;
+    margin: 0;
+    width: 1px; /* Standard UPC module width */
+    flex-shrink: 0;
+}
+
+/* Print styles for exact UPC-A dimensions */
+@media print {
+    .barcode-display {
+        height: 26mm; /* Standard UPC height */
+        padding: 2mm;
+        border: none;
+        page-break-inside: avoid;
+    }
+    
+    .upc-bar, .upc-space {
+        width: 0.33mm; /* Standard UPC module width at 300 DPI */
+    }
+    
+    .printable-barcode {
+        width: 37.29mm; /* Standard UPC-A width */
+        margin: 5mm auto;
+    }
+}
+
+.barcode-text {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-align: center;
+}
+
+.print-button, .reset-button {
+    background: var(--loading-accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 5px;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+}
+
+.print-button:hover, .reset-button:hover {
+    background: var(--loading-gradient-start);
+    color: white;
+}
+
+.reset-button {
+    background: var(--success-green);
+}
+
+.reset-button:hover {
+    background: #45a049;
+}
+
+.success-message {
+    text-align: center;
+    padding: 20px;
+}
+
+#ingredient-barcode-container {
+    margin-top: 20px;
+    display: none;
+}
+
+/* Styles for ingredient barcode display in all-ingredients view */
+.ingredient-barcode-display {
+    margin-top: 15px;
+    padding: 10px;
+    background: var(--bg-light-gray);
+    border-radius: 6px;
+    border: 1px solid var(--border-light-gray);
+}
+
+.barcode-display-container {
+    text-align: center;
+}
+
+.barcode-display-container .barcode-display {
+    height: 40px;
+    margin: 8px auto;
+    max-width: 200px;
+    border: 1px solid #ccc;
+    background: white;
+}
+
+.barcode-display-container .barcode-text {
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: bold;
+    color: #333;
+    letter-spacing: 1px;
+    margin-top: 4px;
+}
+
+/* Adjustments for all-ingredient items */
+.ingredient-item.all-ingredient {
+    /* Remove the different styling and inherit from base .ingredient-item */
+    margin-bottom: 16px;
+}
+
+.ingredients-list.all-ingredients {
+    padding: 0 24px;
+}
+
+/* Empty State Messages */
+.empty-state-message {
+    text-align: center;
+    color: #666;
+    padding: 40px 24px;
+}
+
+.empty-state-message h3,
+#rightBoxContent .empty-state-message h3 {
+    margin: 0 0 16px 0 !important;
+    font-size: 1.5em;
+    color: #666 !important;
+    border-bottom: none !important;
+    padding: 0 !important;
+}
+
+.empty-state-message p {
+    margin: 0;
+    color: #666;
+    font-size: 1em;
+    line-height: 1.5;
+}
