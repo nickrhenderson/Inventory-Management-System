@@ -8,6 +8,22 @@ let selectedProductId = null;
 window.selectedProductId = selectedProductId;
 
 /**
+ * Animate product row in (without the gray-to-white highlight effect)
+ * @param {HTMLElement} row - Table row element to animate
+ */
+function animateProductRowIn(row) {
+    row.getBoundingClientRect();
+    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
+    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+    
+    setTimeout(() => {
+        // Remove the animation class without adding the loaded class
+        // This prevents the gray-to-white highlight animation
+        row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+    }, INVENTORY_CONFIG.ANIMATION.ANIMATION_DURATION);
+}
+
+/**
  * Load and display products data
  */
 async function loadProductsData() {
@@ -188,27 +204,6 @@ async function createProductRow(product, index) {
 
 // Make createProductRow globally accessible for search functionality
 window.createProductRow = createProductRow;
-
-/**
- * Animate a product row appearing
- * @param {HTMLElement} row - Row element to animate
- */
-function animateProductRowIn(row) {
-    row.getBoundingClientRect();
-    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
-    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
-    
-    setTimeout(() => {
-        row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_LOADED);
-        
-        setTimeout(() => {
-            row.classList.remove(
-                INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN, 
-                INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_LOADED
-            );
-        }, INVENTORY_CONFIG.ANIMATION.LOADED_DURATION);
-    }, INVENTORY_CONFIG.ANIMATION.ANIMATION_DURATION);
-}
 
 // Make animateProductRowIn globally accessible for search functionality
 window.animateProductRowIn = animateProductRowIn;

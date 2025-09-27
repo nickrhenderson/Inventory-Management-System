@@ -5,6 +5,9 @@ pywebview>=4.0.0
 # PDF generation with barcode support
 reportlab>=3.6.0
 
+# HTTP requests for update functionality
+requests>=2.25.0
+
 # Note: The following modules are part of Python's standard library and don't need to be installed:
 # - os (operating system interface)
 # - sqlite3 (SQLite database)

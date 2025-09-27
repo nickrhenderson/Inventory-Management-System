@@ -35,9 +35,40 @@
         <div class="settings-content">
             <h3>Settings</h3>
             
-            <!-- Settings sections can be added here -->
+            <!-- Update Section -->
             <div class="setting-section">
-                <p>Settings panel ready for configuration options.</p>
+                <h4>Application Updates</h4>
+                <div class="setting-item">
+                    <div class="version-info">
+                        <span>Current Version: <span id="currentVersion">Loading...</span></span>
+                    </div>
+                    <div class="update-controls">
+                        <button id="checkUpdateBtn" class="btn btn-primary" onclick="checkForUpdates()">
+                            Check for Updates
+                        </button>
+                        <div id="updateStatus" class="update-status"></div>
+                        <div id="updateActions" class="update-actions" style="display: none;">
+                            <button id="downloadUpdateBtn" class="btn btn-success" onclick="downloadUpdate()">
+                                Download Update
+                            </button>
+                            <button id="viewReleaseBtn" class="btn btn-secondary" onclick="viewRelease()">
+                                View Release Notes
+                            </button>
+                        </div>
+                        <div id="downloadProgress" class="download-progress" style="display: none;">
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                            <span id="progressText">Downloading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Other Settings sections can be added here -->
+            <div class="setting-section">
+                <h4>General</h4>
+                <p>Additional settings can be configured here.</p>
             </div>
         </div>
     </aside>

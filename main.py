@@ -8,10 +8,18 @@ import string
 import time
 import tempfile
 import webbrowser
+import requests
+import json
+import shutil
+import subprocess
 from datetime import datetime, timedelta
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.graphics.barcode import code128
+
+# Application version
+APP_VERSION = "0.1.1"
+GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
 try:
@@ -516,6 +524,14 @@ class InventoryAPI:
 	def generate_barcode_pdf(self, barcode_id):
 		"""Generate a PDF file with a printable barcode"""
 		try:
+			# Look up the ingredient name from the database
+			ingredient_name = "Unknown Ingredient"
+			with self._get_db_connection() as conn:
+				cursor = conn.execute('SELECT name FROM ingredients WHERE barcode_id = ?', (barcode_id,))
+				result = cursor.fetchone()
+				if result:
+					ingredient_name = result['name']
+			
 			# Create a temporary file for the PDF
 			temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
 			temp_filename = temp_file.name
@@ -526,11 +542,11 @@ class InventoryAPI:
 			width, height = letter
 			
 			# Set up the page
-			c.setTitle(f"Barcode - {barcode_id}")
+			c.setTitle(f"Barcode - {ingredient_name}")
 			
-			# Add header text
+			# Add header text with ingredient name
 			c.setFont("Helvetica-Bold", 16)
-			c.drawCentredString(width/2, height - 100, "Inventory Barcode")
+			c.drawCentredString(width/2, height - 100, ingredient_name)
 			
 			# Add barcode ID text
 			c.setFont("Helvetica", 12)
@@ -568,6 +584,191 @@ class InventoryAPI:
 			
 		except Exception as e:
 			return self._error_response(f"Failed to generate barcode PDF: {str(e)}")
+	
+	def get_app_version(self):
+		"""Get the current application version"""
+		return self._success_response("Version retrieved", version=APP_VERSION)
+	
+	def check_for_updates(self):
+		"""Check for updates on GitHub releases"""
+		try:
+			# GitHub API endpoint for latest release (this excludes pre-releases)
+			url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+			
+			response = requests.get(url, timeout=10)
+			
+			# If no latest release found (404), try to get all releases and find the latest
+			if response.status_code == 404:
+				url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+				response = requests.get(url, timeout=10)
+				response.raise_for_status()
+				
+				releases = response.json()
+				if not releases:
+					return self._error_response("No releases found in repository")
+				
+				# Get the most recent release (including pre-releases)
+				release_data = releases[0]
+			else:
+				response.raise_for_status()
+				release_data = response.json()
+			
+			latest_version = release_data.get('tag_name', '').lstrip('v')
+			release_url = release_data.get('html_url', '')
+			release_notes = release_data.get('body', '')
+			published_at = release_data.get('published_at', '')
+			is_prerelease = release_data.get('prerelease', False)
+			
+			# Find the .exe asset
+			exe_asset = None
+			for asset in release_data.get('assets', []):
+				if asset.get('name', '').endswith('.exe'):
+					exe_asset = {
+						'name': asset.get('name'),
+						'download_url': asset.get('browser_download_url'),
+						'size': asset.get('size', 0)
+					}
+					break
+			
+			# Compare versions
+			update_available = self._is_newer_version(latest_version, APP_VERSION)
+			
+			return self._success_response(
+				"Update check completed",
+				current_version=APP_VERSION,
+				latest_version=latest_version,
+				update_available=update_available,
+				release_url=release_url,
+				release_notes=release_notes,
+				published_at=published_at,
+				is_prerelease=is_prerelease,
+				exe_asset=exe_asset
+			)
+			
+		except requests.RequestException as e:
+			return self._error_response(f"Failed to check for updates: Network error - {str(e)}")
+		except json.JSONDecodeError as e:
+			return self._error_response(f"Failed to parse update information: {str(e)}")
+		except Exception as e:
+			return self._error_response(f"Failed to check for updates: {str(e)}")
+	
+	def _is_newer_version(self, latest, current):
+		"""Compare version strings to determine if latest is newer than current"""
+		try:
+			# Simple version comparison - assumes semantic versioning (x.y.z)
+			latest_parts = [int(x) for x in latest.split('.')]
+			current_parts = [int(x) for x in current.split('.')]
+			
+			# Pad shorter version with zeros
+			max_len = max(len(latest_parts), len(current_parts))
+			latest_parts.extend([0] * (max_len - len(latest_parts)))
+			current_parts.extend([0] * (max_len - len(current_parts)))
+			
+			for latest_part, current_part in zip(latest_parts, current_parts):
+				if latest_part > current_part:
+					return True
+				elif latest_part < current_part:
+					return False
+			
+			return False  # Versions are equal
+			
+		except (ValueError, AttributeError):
+			# If version parsing fails, assume update is available to be safe
+			return True
+	
+	def download_update(self, download_url):
+		"""Download the update file"""
+		try:
+			if not download_url:
+				return self._error_response("No download URL provided")
+			
+			# Create downloads directory
+			downloads_dir = os.path.join(get_data_path(), "downloads")
+			os.makedirs(downloads_dir, exist_ok=True)
+			
+			# Get filename from URL
+			filename = download_url.split('/')[-1]
+			if not filename.endswith('.exe'):
+				filename = "InventorySystem_Update.exe"
+			
+			file_path = os.path.join(downloads_dir, filename)
+			
+			# Download the file
+			response = requests.get(download_url, stream=True, timeout=30)
+			response.raise_for_status()
+			
+			total_size = int(response.headers.get('content-length', 0))
+			downloaded = 0
+			
+			with open(file_path, 'wb') as f:
+				for chunk in response.iter_content(chunk_size=8192):
+					if chunk:
+						f.write(chunk)
+						downloaded += len(chunk)
+			
+			return self._success_response(
+				"Update downloaded successfully",
+				file_path=file_path,
+				file_size=downloaded,
+				filename=filename
+			)
+			
+		except requests.RequestException as e:
+			return self._error_response(f"Failed to download update: Network error - {str(e)}")
+		except Exception as e:
+			return self._error_response(f"Failed to download update: {str(e)}")
+	
+	def install_update(self, file_path):
+		"""Install the downloaded update"""
+		try:
+			if not os.path.exists(file_path):
+				return self._error_response("Update file not found")
+			
+			# Get current executable path
+			if getattr(sys, 'frozen', False):
+				current_exe = sys.executable
+			else:
+				return self._error_response("Cannot update - not running as executable")
+			
+			# Create batch script for updating
+			batch_script = os.path.join(get_data_path(), "update.bat")
+			
+			with open(batch_script, 'w') as f:
+				f.write(f'''@echo off
+echo Installing update...
+timeout /t 3 /nobreak > nul
+taskkill /f /im "{os.path.basename(current_exe)}" > nul 2>&1
+timeout /t 2 /nobreak > nul
+copy /y "{file_path}" "{current_exe}"
+if %errorlevel% equ 0 (
+    echo Update installed successfully!
+    del "{file_path}"
+    del "{batch_script}"
+    start "" "{current_exe}"
+) else (
+    echo Update failed!
+    pause
+)
+''')
+			
+			# Start the update process
+			subprocess.Popen(['cmd', '/c', batch_script], creationflags=subprocess.CREATE_NO_WINDOW)
+			
+			return self._success_response(
+				"Update process started - application will restart",
+				restart_required=True
+			)
+			
+		except Exception as e:
+			return self._error_response(f"Failed to install update: {str(e)}")
+	
+	def open_release_page(self, release_url):
+		"""Open the GitHub release page in the browser"""
+		try:
+			webbrowser.open(release_url)
+			return self._success_response("Release page opened in browser")
+		except Exception as e:
+			return self._error_response(f"Failed to open release page: {str(e)}")
 
 def get_resource_path(relative_path):
 	"""Get absolute path to resource, works for dev and for PyInstaller"""
@@ -604,7 +805,7 @@ def main():
 		url,
 		width=1200,
 		height=720,
-		min_size=(600, 400),
+		min_size=(1100, 125),
 		resizable=True,
 		js_api=api
 	)

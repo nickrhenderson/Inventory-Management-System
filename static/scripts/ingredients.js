@@ -300,7 +300,9 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
                 </div>
             </div>
             <div class="ingredient-barcode-display">
-                <div class="barcode-display-container">
+                <div class="barcode-display-container clickable-barcode" 
+                     onclick="printBarcode('${ingredient.barcode_id}')" 
+                     title="Print Barcode">
                     <div class="barcode-display">
                         ${barcodeDisplay}
                     </div>

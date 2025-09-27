@@ -284,52 +284,18 @@ async function printBarcode(barcodeId) {
     console.log('Print barcode requested for:', barcodeId);
     
     try {
-        // Show loading state (if there's a button, update it)
-        const button = event?.target;
-        if (button) {
-            button.textContent = 'Generating PDF...';
-            button.disabled = true;
-        }
-        
-        // Call backend to generate PDF
+        // Call backend to generate PDF - no visual feedback needed
         const result = await pywebview.api.generate_barcode_pdf(barcodeId);
         
         if (result.success) {
             console.log('Barcode PDF generated successfully:', result.pdf_path);
             // PDF should automatically open in default browser/application
-            // Show success message briefly
-            if (button) {
-                button.textContent = '✓ PDF Generated';
-                button.style.backgroundColor = '#4caf50';
-                
-                // Reset button after delay
-                setTimeout(() => {
-                    button.textContent = '🖨️ Print Barcode';
-                    button.disabled = false;
-                    button.style.backgroundColor = '';
-                }, 3000);
-            }
         } else {
             throw new Error(result.error || 'Failed to generate PDF');
         }
         
     } catch (error) {
         console.error('Error generating barcode PDF:', error);
-        
-        // Show error state
-        if (button) {
-            button.textContent = '❌ PDF Error';
-            button.style.backgroundColor = '#f44336';
-            
-            // Reset button after delay
-            setTimeout(() => {
-                button.textContent = '🖨️ Print Barcode';
-                button.disabled = false;
-                button.style.backgroundColor = '';
-            }, 3000);
-        }
-        
-        // Could also show a toast/alert to user
-        alert('Failed to generate barcode PDF: ' + error.message);
+        // Silent error handling - no visual feedback to the barcode display
     }
 }
