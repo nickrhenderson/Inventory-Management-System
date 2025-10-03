@@ -9,7 +9,7 @@ const INVENTORY_CONFIG = {
     
     // Search settings
     SEARCH: {
-        DEBOUNCE_DELAY: 300,
+        DEBOUNCE_DELAY: 150, // Reduced from 300ms for faster response
         BARCODE_PATTERN: /^(978|PRD)/i
     },
     
@@ -17,8 +17,8 @@ const INVENTORY_CONFIG = {
     ANIMATION: {
         ROW_DELAY: 120,
         ROW_FADE_DELAY: 80,
-        FADE_DURATION: 400,
-        FADE_IN_DURATION: 500,
+        FADE_DURATION: 200, // Reduced from 400ms for snappier feel
+        FADE_IN_DURATION: 250, // Reduced from 500ms for faster fade-in
         ANIMATION_DURATION: 800,
         LOADED_DURATION: 800,
         LOADING_DELAY: 800,

@@ -53,12 +53,7 @@ async function loadProductsData() {
  * @param {HTMLElement} container - Container element to show message in
  */
 function displayNoProductsMessage(container) {
-    container.innerHTML = `
-        <div class="empty-state-message">
-            <h3>No Products Available</h3>
-            <p>Click the + button to create your first product.</p>
-        </div>
-    `;
+    container.innerHTML = '';
 }
 
 /**
@@ -175,14 +170,23 @@ async function createProductRow(product, index) {
         <td>${dateMixed}</td>
         <td class="price">${totalCost}</td>
         <td class="quantity">${totalQuantity}</td>
-        <td class="product-actions">
-            <button class="product-delete-button" 
-                    onclick="event.stopPropagation(); confirmDeleteProduct(${product.id}, '${product.product_name}')"
-                    title="Delete Product">
-                <div class="delete-icon">
-                    <img src="static/img/svg/trash.svg" alt="Delete" />
-                </div>
-            </button>
+        <td>
+            <div class="product-actions">
+                <button class="product-edit-button" 
+                        onclick="event.stopPropagation(); editProduct(${product.id})"
+                        title="Edit Product">
+                    <div class="edit-icon">
+                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                    </div>
+                </button>
+                <button class="product-delete-button" 
+                        onclick="event.stopPropagation(); confirmDeleteProduct(${product.id}, '${product.product_name}')"
+                        title="Delete Product">
+                    <div class="delete-icon">
+                        <img src="static/img/svg/trash.svg" alt="Delete" />
+                    </div>
+                </button>
+            </div>
         </td>
     `;
     
@@ -326,6 +330,27 @@ async function resetIngredientsPanel() {
             // Apply current search filter to the newly loaded ingredients
             await filterIngredientsIfApplicable(searchBar.value.trim());
         }
+    }
+}
+
+/**
+ * Edit an existing product
+ * @param {number} productId - ID of the product to edit
+ */
+async function editProduct(productId) {
+    try {
+        // Get product data from API
+        const productData = await pywebview.api.get_product_by_id(productId);
+        if (!productData) {
+            throw new Error('Product not found');
+        }
+        
+        // Open product modal in edit mode
+        await openProductModal(productData, true);
+        
+    } catch (error) {
+        console.error('Error loading product for edit:', error);
+        alert('Failed to load product data for editing.');
     }
 }
 

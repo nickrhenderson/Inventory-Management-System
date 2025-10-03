@@ -129,7 +129,24 @@ function formatQuantity(quantity, unit = INVENTORY_CONFIG.DEFAULTS.UNIT) {
  * @returns {string} Formatted date string
  */
 function formatDate(date) {
-    return new Date(date).toLocaleDateString();
+    if (!date) return '';
+    
+    // Handle date string without timezone conversion to avoid "day after" bug
+    const dateStr = String(date).split('T')[0]; // Remove time part if present
+    const dateParts = dateStr.split('-');
+    
+    if (dateParts.length === 3) {
+        const year = dateParts[0];
+        const month = dateParts[1];
+        const day = dateParts[2];
+        
+        // Create date using local timezone to avoid shifts
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return localDate.toLocaleDateString();
+    }
+    
+    // Fallback for unexpected formats
+    return String(date);
 }
 
 /**

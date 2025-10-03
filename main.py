@@ -18,7 +18,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.graphics.barcode import code128
 
 # Application version
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.2.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -395,6 +395,140 @@ class InventoryAPI:
 			''', (barcode_id,))
 			row = cursor.fetchone()
 			return dict(row) if row else None
+	
+	def get_product_by_id(self, product_id):
+		"""Get a specific product by its ID"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
+				       total_quantity, total_cost, notes, date_added
+				FROM products 
+				WHERE id = ?
+			''', (product_id,))
+			row = cursor.fetchone()
+			return dict(row) if row else None
+	
+	def get_ingredient_by_id(self, ingredient_id):
+		"""Get a specific ingredient by its ID"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT id, barcode_id, name, unit_cost, supplier,
+				       purchase_date, expiration_date, is_flagged
+				FROM ingredients 
+				WHERE id = ?
+			''', (ingredient_id,))
+			row = cursor.fetchone()
+			return dict(row) if row else None
+	
+	def update_product(self, product_data):
+		"""Update an existing product with new ingredient data"""
+		try:
+			with self._get_db_connection() as conn:
+				product_id = product_data['id']
+				mixed_date = self._parse_date(product_data['mixed_date'], datetime.now().date())
+				
+				# Verify product exists
+				existing_product = conn.execute('SELECT id FROM products WHERE id = ?', (product_id,)).fetchone()
+				if not existing_product:
+					return self._error_response("Product not found")
+				
+				# Update product basic info (allow name and mixed date changes)
+				conn.execute('''
+					UPDATE products 
+					SET product_name = ?, date_mixed = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
+					WHERE id = ?
+				''', (product_data['product_name'], mixed_date, "Updated via product edit modal", product_id))
+				
+				# Delete existing product-ingredient relationships
+				conn.execute('DELETE FROM product_ingredients WHERE product_id = ?', (product_id,))
+				
+				# Add updated ingredients
+				total_cost = 0
+				total_quantity = 0
+				
+				for ingredient_data in product_data['ingredients']:
+					ingredient_id = ingredient_data['ingredient_id']
+					quantity = ingredient_data['quantity']
+					
+					# Get ingredient unit cost
+					ingredient_info = conn.execute(
+						"SELECT unit_cost FROM ingredients WHERE id = ?", 
+						(ingredient_id,)
+					).fetchone()
+					
+					if not ingredient_info:
+						raise Exception(f"Ingredient with ID {ingredient_id} not found")
+					
+					unit_cost = ingredient_info[0]
+					cost = quantity * unit_cost
+					total_cost += cost
+					total_quantity += quantity
+					
+					# Insert updated product-ingredient relationship
+					conn.execute('''
+						INSERT INTO product_ingredients (product_id, ingredient_id, quantity_used, cost_per_unit)
+						VALUES (?, ?, ?, ?)
+					''', (product_id, ingredient_id, quantity, unit_cost))
+				
+				# Update product totals
+				conn.execute('''
+					UPDATE products SET total_quantity = ?, total_cost = ? WHERE id = ?
+				''', (total_quantity, total_cost, product_id))
+				
+				conn.commit()
+				
+				return self._success_response("Product updated successfully", product_id=product_id)
+				
+		except Exception as e:
+			return self._error_response(e)
+	
+	def update_ingredient(self, ingredient_data):
+		"""Update an existing ingredient (barcode cannot be changed)"""
+		try:
+			with self._get_db_connection() as conn:
+				ingredient_id = ingredient_data['id']
+				
+				# Verify ingredient exists
+				existing_ingredient = conn.execute('SELECT barcode_id, name FROM ingredients WHERE id = ?', (ingredient_id,)).fetchone()
+				if not existing_ingredient:
+					return self._error_response("Ingredient not found")
+				
+				# Parse expiry date
+				expiry_date = self._parse_date(ingredient_data.get('expiry_date'))
+				
+				# Update ingredient (barcode_id remains unchanged)
+				conn.execute('''
+					UPDATE ingredients 
+					SET name = ?, supplier = ?, expiration_date = ?, unit_cost = ?, 
+					    purchase_date = ?, last_updated = CURRENT_TIMESTAMP
+					WHERE id = ?
+				''', (
+					ingredient_data['name'],
+					ingredient_data.get('location', ''),  # location maps to supplier
+					expiry_date,
+					ingredient_data.get('cost', 0),
+					self._parse_date(ingredient_data.get('purchase_date'), datetime.now().date()),
+					ingredient_id
+				))
+				
+				conn.commit()
+				
+				# Get the updated ingredient data
+				updated_ingredient = conn.execute('''
+					SELECT id, barcode_id, name, supplier, 
+					       expiration_date, unit_cost, purchase_date, is_flagged
+					FROM ingredients WHERE id = ?
+				''', (ingredient_id,)).fetchone()
+				
+				ingredient_dict = dict(updated_ingredient) if updated_ingredient else {}
+				
+				return self._success_response(
+					"Ingredient updated successfully",
+					ingredient=ingredient_dict
+				)
+				
+		except Exception as e:
+			return self._error_response(e)
 	
 	def get_all_ingredients(self):
 		"""Get all available ingredients for product creation"""

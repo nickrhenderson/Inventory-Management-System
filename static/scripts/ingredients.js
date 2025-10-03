@@ -9,12 +9,7 @@ function displayIngredientsDetails(ingredients) {
     const totalContainer = document.getElementById('ingredientsTotalFixed');
     
     if (!ingredients || ingredients.length === 0) {
-        rightContainer.innerHTML = `
-            <div class="empty-state-message">
-                <h3>No Ingredients Found</h3>
-                <p>This product does not have any ingredients assigned to it.</p>
-            </div>
-        `;
+        rightContainer.innerHTML = '';
         totalContainer.innerHTML = '';
         totalContainer.style.display = 'none';
         
@@ -89,6 +84,13 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
     return `
         <div class="ingredient-item${flaggedClass}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
+                <button class="ingredient-edit-button" 
+                        onclick="editIngredient(${ingredient.id})"
+                        title="Edit Ingredient">
+                    <div class="edit-icon">
+                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                    </div>
+                </button>
                 <button class="ingredient-flag-button${flaggedButtonClass}" 
                         onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
                         title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
@@ -183,12 +185,7 @@ async function displayAllIngredients() {
  * @param {HTMLElement} totalContainer - Total container element
  */
 function displayNoIngredientsMessage(rightContainer, totalContainer) {
-    rightContainer.innerHTML = `
-        <div class="empty-state-message">
-            <h3>No Ingredients Available</h3>
-            <p>Click the + button to add your first ingredient to the inventory.</p>
-        </div>
-    `;
+    rightContainer.innerHTML = '';
     totalContainer.style.display = 'none';
     updateIngredientsTitle('All Ingredients', true);
 }
@@ -259,6 +256,13 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
     return `
         <div class="ingredient-item all-ingredient${flaggedClass}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
+                <button class="ingredient-edit-button" 
+                        onclick="editIngredient(${ingredient.id})"
+                        title="Edit Ingredient">
+                    <div class="edit-icon">
+                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                    </div>
+                </button>
                 <button class="ingredient-flag-button${flaggedButtonClass}" 
                         onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
                         title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
@@ -401,6 +405,27 @@ async function toggleIngredientFlag(ingredientId, ingredientName, isCurrentlyFla
             }
         }
     );
+}
+
+/**
+ * Edit an existing ingredient
+ * @param {number} ingredientId - ID of the ingredient to edit
+ */
+async function editIngredient(ingredientId) {
+    try {
+        // Get ingredient data from API
+        const ingredientData = await pywebview.api.get_ingredient_by_id(ingredientId);
+        if (!ingredientData) {
+            throw new Error('Ingredient not found');
+        }
+        
+        // Open ingredient modal in edit mode
+        await openIngredientModal(ingredientData, true);
+        
+    } catch (error) {
+        console.error('Error loading ingredient for edit:', error);
+        alert('Failed to load ingredient data for editing.');
+    }
 }
 
 /**

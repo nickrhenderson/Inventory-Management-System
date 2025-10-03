@@ -435,7 +435,9 @@ body {
 .inventory-table td:nth-child(6) {
     width: 13%;
     text-align: center;
-    min-width: 50px; /* Ensure minimum space for buttons */
+    min-width: 80px; /* Ensure minimum space for buttons */
+    max-width: 0; /* Force consistent sizing */
+    padding: 8px 4px; /* Reduce horizontal padding for buttons */
 }
 .inventory-table th {
     background-color: var(--bg-light-gray);
@@ -1052,7 +1054,9 @@ body {
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-light-gray);
     gap: 8px;
-    padding-right: 80px; /* Reserve space for action buttons */
+    padding-right: 100px; /* Reserve more space for action buttons (edit + flag + delete) */
+    position: relative;
+    overflow: hidden; /* Ensure container clips overflowing content */
 }
 
 .ingredient-header strong {
@@ -1062,7 +1066,8 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
-    max-width: 100%;
+    max-width: calc(100% - 80px); /* Ensure space for action buttons */
+    display: block; /* Ensure block display for text truncation */
 }
 
 .ingredient-category {
@@ -1118,6 +1123,8 @@ body {
 
 .ingredient-flag-button:hover {
     transform: scale(1.1);
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 4px;
 }
 
 /* Custom flag design */
@@ -1194,6 +1201,8 @@ body {
 
 .ingredient-delete-button:hover {
     transform: scale(1.1);
+    background: rgba(255, 0, 0, 0.1);
+    border-radius: 4px;
 }
 
 .delete-icon {
@@ -1216,10 +1225,22 @@ body {
     filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
 }
 
-/* Product delete button styling */
-.product-actions {
+/* Product actions column styling */
+.inventory-table td.product-actions {
     text-align: center;
-    position: relative;
+    vertical-align: middle;
+    padding: 4px;
+}
+
+.product-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
 }
 
 .product-delete-button {
@@ -1233,7 +1254,7 @@ body {
     justify-content: center;
     transition: all 0.2s ease;
     padding: 0;
-    margin: 0 auto;
+    margin: 0;
 }
 
 .product-delete-button:hover {
@@ -1251,6 +1272,117 @@ body {
 
 .product-delete-button:hover .delete-icon img {
     filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
+}
+
+/* Edit button styling */
+.ingredient-edit-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin-right: 4px;
+}
+
+.ingredient-edit-button:hover {
+    transform: scale(1.1);
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 4px;
+}
+
+.edit-icon {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.edit-icon img {
+    width: 100%;
+    height: 100%;
+    filter: opacity(0.6);
+    transition: filter 0.2s ease;
+}
+
+.ingredient-edit-button:hover .edit-icon img {
+    filter: opacity(1) sepia(1) saturate(5) hue-rotate(200deg) brightness(1) contrast(1.2);
+}
+
+/* Product edit button styling */
+.product-edit-button {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin: 0;
+}
+
+.product-edit-button:hover {
+    transform: scale(1.1);
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 4px;
+}
+
+.product-edit-button .edit-icon img {
+    width: 18px;
+    height: 18px;
+    filter: opacity(0.6);
+    transition: filter 0.2s ease;
+}
+
+.product-edit-button:hover .edit-icon img {
+    filter: opacity(1) sepia(1) saturate(5) hue-rotate(200deg) brightness(1) contrast(1.2);
+}
+
+/* Selected ingredient in edit mode styling */
+.ingredient-option.selected-in-edit {
+    background: rgba(0, 123, 255, 0.05);
+    border-left: 3px solid #007bff;
+    padding-left: calc(12px - 3px); /* Maintain alignment */
+}
+
+.ingredient-option.selected-in-edit:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Inline input container for product name and batch ID */
+.inline-input-container {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.inline-input-container input[type="text"] {
+    margin-bottom: 0;
+}
+
+.inline-input-container #productName {
+    flex: 1;
+}
+
+.inline-input-container #productBatchDisplay {
+    flex: 0 0 150px;
+}
+
+.inline-input-container #ingredientName {
+    flex: 1;
+}
+
+.inline-input-container #ingredientBarcodeDisplay {
+    flex: 0 0 150px;
 }
 
 .ingredient-details {
@@ -1484,7 +1616,7 @@ body {
 
 .success-message {
     text-align: center;
-    padding: 20px;
+    padding: 8px 12px;
 }
 
 #ingredient-barcode-container {

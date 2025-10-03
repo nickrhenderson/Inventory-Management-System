@@ -1,5 +1,39 @@
 // Search functionality for the inventory system
 
+// Cache for search results to avoid duplicate API calls
+const searchCache = new Map();
+const CACHE_EXPIRY = 30000; // 30 seconds
+
+// Global search state management
+let currentSearchId = 0;
+let activeAnimations = new Set();
+
+/**
+ * Cancel all active animations
+ */
+function cancelActiveAnimations() {
+    activeAnimations.forEach(animationId => {
+        clearTimeout(animationId);
+    });
+    activeAnimations.clear();
+}
+
+/**
+ * Register an animation timeout
+ * @param {number} timeoutId - The timeout ID to track
+ */
+function registerAnimation(timeoutId) {
+    activeAnimations.add(timeoutId);
+}
+
+/**
+ * Unregister an animation timeout
+ * @param {number} timeoutId - The timeout ID to remove
+ */
+function unregisterAnimation(timeoutId) {
+    activeAnimations.delete(timeoutId);
+}
+
 /**
  * Initialize search functionality
  */
@@ -7,14 +41,28 @@ function initializeSearch() {
     const searchBar = document.querySelector('.search-bar');
     if (searchBar) {
         let searchTimeout;
+        let currentSearchController;
         
         searchBar.addEventListener('input', (e) => {
             const searchTerm = e.target.value.trim();
             
+            // Cancel previous search if still running
+            if (currentSearchController) {
+                currentSearchController.abort();
+            }
+            
+            // Cancel all active animations by incrementing search ID
+            currentSearchId++;
+            
             // Debounce search to avoid too many API calls
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(async () => {
-                await filterProductsData(searchTerm);
+                // Generate new search ID for this search
+                const searchId = ++currentSearchId;
+                currentSearchController = new AbortController();
+                
+                await performAsyncSearch(searchTerm, currentSearchController.signal, searchId);
+                currentSearchController = null;
             }, INVENTORY_CONFIG.SEARCH.DEBOUNCE_DELAY);
         });
         
@@ -23,22 +71,59 @@ function initializeSearch() {
             if (e.key === 'Escape') {
                 searchBar.value = '';
                 clearTimeout(searchTimeout);
-                filterProductsData('');
+                if (currentSearchController) {
+                    currentSearchController.abort();
+                    currentSearchController = null;
+                }
+                // Cancel animations by incrementing search ID
+                const searchId = ++currentSearchId;
+                performAsyncSearch('', null, searchId);
             }
         });
     }
 }
 
 /**
+ * Perform comprehensive async search for both products and ingredients
+ * @param {string} searchTerm - The search term
+ * @param {AbortSignal} signal - Abort signal for cancelling search
+ * @param {number} searchId - Unique search ID for this search operation
+ */
+async function performAsyncSearch(searchTerm, signal = null, searchId = 0) {
+    try {
+        if (!searchTerm) {
+            // Show all data if search is empty
+            await Promise.all([
+                showAllProducts(),
+                showAllIngredientsIfApplicable()
+            ]);
+            return;
+        }
+        
+        // Execute the improved simultaneous search
+        await filterProductsData(searchTerm, searchId);
+        
+        // Check if search was cancelled or superseded
+        if (signal?.aborted || searchId !== currentSearchId) return;
+        
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('Search error:', error);
+        }
+    }
+}
+
+/**
  * Filter products data based on search term
  * @param {string} searchTerm - The search term to filter by
+ * @param {number} searchId - Unique search ID for validation
  */
-async function filterProductsData(searchTerm) {
+async function filterProductsData(searchTerm, searchId = 0) {
     const tbody = document.getElementById('productsTableBody');
     if (!tbody || !window.allProductsData || !window.allProductsData.length) return;
     
     if (!searchTerm) {
-        // Show all products and ingredients if search is empty
+        // Show all products and ingredients if search is empty - run in parallel for sync
         await Promise.all([
             showAllProducts(),
             showAllIngredientsIfApplicable()
@@ -46,16 +131,14 @@ async function filterProductsData(searchTerm) {
         return;
     }
     
-    // Run product search and ingredient filtering in parallel
-    const [matchingProductIds] = await Promise.all([
+    // Run both product search and ingredient analysis in parallel, collecting results
+    const [matchingProductIds, ingredientFilterData] = await Promise.all([
         searchProducts(searchTerm),
-        filterIngredientsIfApplicable(searchTerm)
+        prepareIngredientFilterData(searchTerm) // Returns data instead of applying changes
     ]);
     
-    // Get all current rows
+    // Process product rows
     const allRows = Array.from(tbody.querySelectorAll('tr'));
-    
-    // Separate matching and non-matching rows
     const matchingRows = [];
     const nonMatchingRows = [];
     
@@ -75,13 +158,40 @@ async function filterProductsData(searchTerm) {
         }
     });
     
-    // Animate both fade-out and fade-in concurrently
+    // Check if this search is still current before starting animations
+    if (searchId !== currentSearchId) {
+        return; // This search has been superseded
+    }
+    
+    // Apply both product and ingredient visual updates with perfectly synchronized timing
+    
+    // First, fade out non-matching items simultaneously
     await Promise.all([
-        fadeOutRows(nonMatchingRows),
-        fadeInRows(matchingRows)
+        fadeOutRows(nonMatchingRows, searchId),
+        ingredientFilterData ? fadeOutIngredientItems(ingredientFilterData.nonMatchingItems || [], searchId) : Promise.resolve()
     ]);
     
-    // If no rows match, show empty message
+    // Check again before fade-in animations
+    if (searchId !== currentSearchId) {
+        return; // This search has been superseded
+    }
+    
+    // Then, fade in matching items simultaneously with coordinated timing
+    await Promise.all([
+        fadeInRows(matchingRows, searchId),
+        ingredientFilterData ? fadeInIngredientItems(ingredientFilterData.matchingItems || [], searchId) : Promise.resolve()
+    ]);
+    
+    // Handle ingredient empty state messaging
+    if (ingredientFilterData) {
+        if (ingredientFilterData.matchingItems.length === 0) {
+            showNoIngredientsMessage(ingredientFilterData.ingredientsList);
+        } else {
+            removeNoIngredientsMessage();
+        }
+    }
+    
+    // Show empty message if no products match
     if (matchingRows.length === 0) {
         showNoResultsMessage(tbody);
     }
@@ -94,9 +204,6 @@ async function showAllProducts() {
     const tbody = document.getElementById('productsTableBody');
     if (!tbody) return;
     
-    // Also show all ingredients if applicable
-    await showAllIngredientsIfApplicable();
-    
     // Remove any empty message
     removeNoResultsMessage(tbody);
     
@@ -108,93 +215,134 @@ async function showAllProducts() {
     
     // Fade in all existing rows
     const allRows = Array.from(tbody.querySelectorAll('tr'));
-    await fadeInRows(allRows);
+    await fadeInRows(allRows, currentSearchId);
 }
 
 /**
  * Fade out specified rows with optimized batching
  * @param {Array<HTMLElement>} rows - Rows to fade out
+ * @param {number} searchId - Search ID for validation
  */
-async function fadeOutRows(rows) {
+async function fadeOutRows(rows, searchId = 0) {
     if (rows.length === 0) return;
     
     // Process rows in smaller batches for better performance
-    const batchSize = 10;
+    const batchSize = 15; // Increased for faster processing
     const batches = [];
     
     for (let i = 0; i < rows.length; i += batchSize) {
         batches.push(rows.slice(i, i + batchSize));
     }
     
-    // Process batches with minimal delay between them
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        
-        // Start all animations in the batch simultaneously
-        const batchPromises = batch.map((row, index) => {
-            return new Promise(resolve => {
-                // Minimal stagger within batch for visual smoothness
-                setTimeout(() => {
-                    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_OUT);
-                    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_IN);
-                    
-                    // Hide the row after animation completes
-                    setTimeout(() => {
-                        row.style.display = 'none';
-                        resolve();
-                    }, INVENTORY_CONFIG.ANIMATION.FADE_DURATION);
-                }, index * 10); // Reduced from 50ms to 10ms
-            });
+    // Process all batches concurrently for maximum speed
+    const batchPromises = batches.map((batch, batchIndex) => {
+        return new Promise(resolve => {
+            // Start batch with small delay for visual flow
+            const batchTimeout = setTimeout(async () => {
+                unregisterAnimation(batchTimeout);
+                const rowPromises = batch.map((row, index) => {
+                    return new Promise(rowResolve => {
+                        // Calculate total delay for smooth stagger
+                        const totalDelay = index * 10; // 10ms stagger
+                        
+                        const itemTimeout = setTimeout(() => {
+                            unregisterAnimation(itemTimeout);
+                            
+                            // Check if search is still current
+                            if (searchId !== currentSearchId) {
+                                rowResolve();
+                                return;
+                            }
+                            
+                            row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_OUT);
+                            row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_IN);
+                            
+                            // Hide the row after animation completes
+                            const hideTimeout = setTimeout(() => {
+                                unregisterAnimation(hideTimeout);
+                                row.style.display = 'none';
+                                rowResolve();
+                            }, INVENTORY_CONFIG.ANIMATION.FADE_DURATION);
+                            registerAnimation(hideTimeout);
+                        }, totalDelay);
+                        registerAnimation(itemTimeout);
+                    });
+                });
+                
+                await Promise.all(rowPromises);
+                resolve();
+            }, batchIndex * 8); // Further reduced batch delay for faster fade-out
+            registerAnimation(batchTimeout);
         });
-        
-        // Wait for current batch to complete before starting next
-        await Promise.all(batchPromises);
-    }
+    });
+    
+    // Wait for all batches to complete
+    await Promise.all(batchPromises);
 }
 
 /**
  * Fade in specified rows with optimized batching
  * @param {Array<HTMLElement>} rows - Rows to fade in
+ * @param {number} searchId - Search ID for validation
  */
-async function fadeInRows(rows) {
+async function fadeInRows(rows, searchId = 0) {
     if (rows.length === 0) return;
     
     // Process rows in smaller batches for better performance
-    const batchSize = 10;
+    const batchSize = 15; // Increased for faster processing
     const batches = [];
     
     for (let i = 0; i < rows.length; i += batchSize) {
         batches.push(rows.slice(i, i + batchSize));
     }
     
-    // Process batches with minimal delay between them
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        
-        // Start all animations in the batch simultaneously
-        const batchPromises = batch.map((row, index) => {
-            return new Promise(resolve => {
-                // Minimal stagger within batch for visual smoothness
-                setTimeout(() => {
-                    // Show the row first
-                    row.style.display = '';
-                    
-                    // Force reflow to ensure display change takes effect
-                    row.offsetHeight;
-                    
-                    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_IN);
-                    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_OUT);
-                    
-                    setTimeout(() => {
-                        resolve();
-                    }, INVENTORY_CONFIG.ANIMATION.FADE_IN_DURATION);
-                }, index * 8); // Reduced from 40ms to 8ms
-            });
+    // Process all batches concurrently for maximum speed
+    const batchPromises = batches.map((batch, batchIndex) => {
+        return new Promise(resolve => {
+            // Small delay between batch starts for visual flow
+            setTimeout(async () => {
+                // Check if search is still current
+                if (searchId !== currentSearchId) {
+                    resolve();
+                    return;
+                }
+                
+                const rowPromises = batch.map((row, index) => {
+                    return new Promise(rowResolve => {
+                        // Calculate total delay: item stagger only
+                        const totalDelay = index * 5; // Reduced to 5ms stagger for faster response
+                        
+                        setTimeout(() => {
+                            // Check if search is still current before animating
+                            if (searchId !== currentSearchId) {
+                                rowResolve();
+                                return;
+                            }
+                            
+                            // Show the row first
+                            row.style.display = '';
+                            
+                            // Force reflow to ensure display change takes effect
+                            row.offsetHeight;
+                            
+                            row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_IN);
+                            row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_OUT);
+                            
+                            setTimeout(() => {
+                                rowResolve();
+                            }, INVENTORY_CONFIG.ANIMATION.FADE_IN_DURATION);
+                        }, totalDelay);
+                    });
+                });
+                
+                await Promise.all(rowPromises);
+                resolve();
+            }, batchIndex * 10); // Reduced batch delay for faster animation start
         });
-        
-        // Wait for current batch to complete before starting next
-        await Promise.all(batchPromises);
-    }
+    });
+    
+    // Wait for all batches to complete
+    await Promise.all(batchPromises);
 }
 
 /**
@@ -205,19 +353,7 @@ function showNoResultsMessage(tbody) {
     // Remove existing message if any
     removeNoResultsMessage(tbody);
     
-    const emptyRow = document.createElement('tr');
-    emptyRow.className = 'no-results-row';
-    emptyRow.innerHTML = `
-        <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-gray);">
-            No products match your search criteria
-        </td>
-    `;
-    tbody.appendChild(emptyRow);
-    
-    // Fade in the message
-    setTimeout(() => {
-        emptyRow.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_FADE_IN);
-    }, 100);
+    // No message displayed - just clean the table
 }
 
 /**
@@ -267,14 +403,26 @@ async function rebuildProductsTable(products) {
  * @returns {Set} Set of matching product IDs
  */
 async function searchProducts(searchTerm) {
+    const cacheKey = `products_${searchTerm.toLowerCase()}`;
+    const now = Date.now();
+    
+    // Check cache first
+    if (searchCache.has(cacheKey)) {
+        const cached = searchCache.get(cacheKey);
+        if (now - cached.timestamp < CACHE_EXPIRY) {
+            return cached.data;
+        }
+        searchCache.delete(cacheKey);
+    }
+    
     const isLikelyBarcode = isBarcodeLikeSearch(searchTerm);
     const matchingProductIds = new Set();
     
     try {
-        // Prepare search promises
+        // Create all search promises simultaneously for maximum parallelism
         const searchPromises = [];
         
-        // Always try ingredient name search (unless it's clearly a complete barcode)
+        // Ingredient name search (always run unless it's a clear long barcode)
         if (!isLikelyBarcode || searchTerm.length < 8) {
             searchPromises.push(
                 pywebview.api.search_products_by_ingredient_name(searchTerm)
@@ -286,7 +434,7 @@ async function searchProducts(searchTerm) {
             );
         }
         
-        // Also try barcode search if it might be a barcode (or contains numbers)
+        // Barcode search (run if likely barcode or contains numbers)
         if (isLikelyBarcode || /\d/.test(searchTerm)) {
             searchPromises.push(
                 pywebview.api.search_products_by_ingredient_barcode(searchTerm.replace(/\s/g, ''))
@@ -298,18 +446,24 @@ async function searchProducts(searchTerm) {
             );
         }
         
-        // Execute all searches in parallel
-        const results = await Promise.all(searchPromises);
+        // Execute all API searches in parallel with improved error handling
+        const results = await Promise.allSettled(searchPromises);
         
-        // Combine results from all search types
+        // Process results from successful searches only
         results.forEach(result => {
-            if (result.products && Array.isArray(result.products)) {
-                result.products.forEach(product => matchingProductIds.add(product.id));
+            if (result.status === 'fulfilled' && result.value.products && Array.isArray(result.value.products)) {
+                result.value.products.forEach(product => matchingProductIds.add(product.id));
             }
         });
         
+        // Cache the results
+        searchCache.set(cacheKey, {
+            data: matchingProductIds,
+            timestamp: now
+        });
+        
     } catch (error) {
-        console.error('Error searching ingredients:', error);
+        console.error('Error in searchProducts:', error);
     }
     
     return matchingProductIds;
@@ -345,39 +499,50 @@ function checkDirectProductMatch(product, searchTerm) {
  * Filter ingredients if the right panel is showing "All Ingredients"
  * @param {string} searchTerm - The search term to filter by
  */
-async function filterIngredientsIfApplicable(searchTerm) {
+/**
+ * Prepare ingredient filter data without applying visual changes
+ * @param {string} searchTerm - The search term
+ * @returns {Object|null} Filter data or null if not applicable
+ */
+async function prepareIngredientFilterData(searchTerm) {
     // Check if we're showing "All Ingredients"
     const titleTextElement = document.getElementById('ingredientsTitleText');
     if (!titleTextElement || titleTextElement.textContent !== 'All Ingredients') {
-        return; // Not showing all ingredients, skip filtering
+        return null; // Not showing all ingredients, skip filtering
     }
     
     const rightContainer = document.getElementById('rightBoxContent');
     const ingredientsList = rightContainer ? rightContainer.querySelector('.ingredients-list.all-ingredients') : null;
     
     if (!ingredientsList) {
-        return; // No ingredients list found
+        return null; // No ingredients list found
     }
     
     const allIngredientItems = Array.from(ingredientsList.querySelectorAll('.ingredient-item.all-ingredient'));
     
     if (!searchTerm) {
         // Show all ingredients if search is empty
-        await fadeInIngredientItems(allIngredientItems);
-        removeNoIngredientsMessage();
-        return;
+        return {
+            ingredientsList,
+            matchingItems: allIngredientItems,
+            nonMatchingItems: [],
+            showAllItems: true
+        };
     }
     
     // Separate matching and non-matching ingredients in parallel
     const matchingItems = [];
     const nonMatchingItems = [];
     
-    // Use requestIdleCallback or immediate processing for better performance
+    // Use async processing with requestIdleCallback for optimal performance
     const processItems = (items) => {
         return new Promise(resolve => {
-            const processChunk = (startIndex) => {
-                const endIndex = Math.min(startIndex + 50, items.length); // Process 50 items at a time
+            const CHUNK_SIZE = 100; // Increased chunk size for better performance
+            
+            const processChunk = async (startIndex) => {
+                const endIndex = Math.min(startIndex + CHUNK_SIZE, items.length);
                 
+                // Process items in the current chunk
                 for (let i = startIndex; i < endIndex; i++) {
                     const item = items[i];
                     if (checkIngredientMatch(item, searchTerm)) {
@@ -388,8 +553,12 @@ async function filterIngredientsIfApplicable(searchTerm) {
                 }
                 
                 if (endIndex < items.length) {
-                    // Use setTimeout to yield control and prevent blocking
-                    setTimeout(() => processChunk(endIndex), 0);
+                    // Use requestIdleCallback if available, otherwise setTimeout
+                    if (window.requestIdleCallback) {
+                        requestIdleCallback(() => processChunk(endIndex));
+                    } else {
+                        setTimeout(() => processChunk(endIndex), 0);
+                    }
                 } else {
                     resolve();
                 }
@@ -401,10 +570,37 @@ async function filterIngredientsIfApplicable(searchTerm) {
     
     await processItems(allIngredientItems);
     
-    // Animate both fade-out and fade-in concurrently
+    return {
+        ingredientsList,
+        matchingItems,
+        nonMatchingItems,
+        showAllItems: false
+    };
+}
+
+/**
+ * Apply ingredient filter results to the UI (simplified for coordinated timing)
+ * @param {Object|null} filterData - Filter data from prepareIngredientFilterData
+ */
+async function applyIngredientFilterResults(filterData) {
+    if (!filterData) {
+        return; // No ingredient filtering needed
+    }
+    
+    const { ingredientsList, matchingItems, nonMatchingItems, showAllItems } = filterData;
+    
+    if (showAllItems) {
+        // Show all ingredients
+        await fadeInIngredientItems(matchingItems, searchId);
+        removeNoIngredientsMessage();
+        return;
+    }
+    
+    // This function is now primarily used for the legacy filterIngredientsIfApplicable
+    // The main search coordination happens in filterProductsData for better timing
     await Promise.all([
-        fadeOutIngredientItems(nonMatchingItems),
-        fadeInIngredientItems(matchingItems)
+        fadeOutIngredientItems(nonMatchingItems, searchId),
+        fadeInIngredientItems(matchingItems, searchId)
     ]);
     
     // Show empty message if no ingredients match
@@ -413,6 +609,11 @@ async function filterIngredientsIfApplicable(searchTerm) {
     } else {
         removeNoIngredientsMessage();
     }
+}
+
+async function filterIngredientsIfApplicable(searchTerm) {
+    const filterData = await prepareIngredientFilterData(searchTerm);
+    await applyIngredientFilterResults(filterData);
 }
 
 // Make function globally accessible
@@ -440,7 +641,7 @@ async function showAllIngredientsIfApplicable() {
     
     // Show all ingredient items
     const allIngredientItems = Array.from(ingredientsList.querySelectorAll('.ingredient-item.all-ingredient'));
-    await fadeInIngredientItems(allIngredientItems);
+    await fadeInIngredientItems(allIngredientItems, currentSearchId);
 }
 
 /**
@@ -473,11 +674,11 @@ function checkIngredientMatch(ingredientItem, searchTerm) {
  * Fade out ingredient items with optimized batching
  * @param {Array<HTMLElement>} items - Items to fade out
  */
-async function fadeOutIngredientItems(items) {
+async function fadeOutIngredientItems(items, searchId = 0) {
     if (items.length === 0) return;
     
-    // Process items in smaller batches for better performance
-    const batchSize = 8;
+    // Use same batch size as products for consistency
+    const batchSize = 15; // Increased for faster processing
     const batches = [];
     
     for (let i = 0; i < items.length; i += batchSize) {
@@ -489,25 +690,37 @@ async function fadeOutIngredientItems(items) {
         return new Promise(async (resolve) => {
             // Small delay between batches for visual flow
             setTimeout(async () => {
+                // Check if search is still current
+                if (searchId !== currentSearchId) {
+                    resolve();
+                    return;
+                }
+                
                 const itemPromises = batch.map((item, index) => {
                     return new Promise(itemResolve => {
                         // Minimal stagger within batch
                         setTimeout(() => {
-                            item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            // Check if search is still current before animating
+                            if (searchId !== currentSearchId) {
+                                itemResolve();
+                                return;
+                            }
+                            
+                            item.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
                             item.style.opacity = '0';
                             item.style.transform = 'translateX(-10px)';
                             
                             setTimeout(() => {
                                 item.style.display = 'none';
                                 itemResolve();
-                            }, 300);
-                        }, index * 15); // Reduced from 30ms to 15ms
+                            }, INVENTORY_CONFIG.ANIMATION.FADE_DURATION); // Use same duration as products
+                        }, index * 5); // Reduced to 5ms stagger for faster response
                     });
                 });
                 
                 await Promise.all(itemPromises);
                 resolve();
-            }, batchIndex * 50);
+            }, batchIndex * 8); // Reduced to match optimized fade-out batch delay
         });
     });
     
@@ -515,35 +728,49 @@ async function fadeOutIngredientItems(items) {
 }
 
 /**
- * Fade in ingredient items with optimized batching
+ * Fade in ingredient items with synchronized timing to match products
  * @param {Array<HTMLElement>} items - Items to fade in
  */
-async function fadeInIngredientItems(items) {
+async function fadeInIngredientItems(items, searchId = 0) {
     if (items.length === 0) return;
     
-    // Process items in smaller batches for better performance
-    const batchSize = 8;
+    // Use same batch size as products for consistent timing
+    const batchSize = 15; // Increased for faster processing
     const batches = [];
     
     for (let i = 0; i < items.length; i += batchSize) {
         batches.push(items.slice(i, i + batchSize));
     }
     
-    // Process batches concurrently
+    // Process all batches concurrently for maximum speed while maintaining timing
     const batchPromises = batches.map((batch, batchIndex) => {
-        return new Promise(async (resolve) => {
-            // Small delay between batches for visual flow
+        return new Promise(resolve => {
+            // Small delay between batch starts for visual flow
             setTimeout(async () => {
+                // Check if search is still current
+                if (searchId !== currentSearchId) {
+                    resolve();
+                    return;
+                }
+                
                 const itemPromises = batch.map((item, index) => {
                     return new Promise(itemResolve => {
-                        // Minimal stagger within batch
+                        // Calculate total delay: batch delay + item stagger
+                        const totalDelay = index * 5; // Reduced to 5ms stagger for faster response
+                        
                         setTimeout(() => {
+                            // Check if search is still current before animating
+                            if (searchId !== currentSearchId) {
+                                itemResolve();
+                                return;
+                            }
+                            
                             item.style.display = '';
-                            item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            item.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
                             item.style.opacity = '0';
                             item.style.transform = 'translateX(-10px)';
                             
-                            // Force reflow
+                            // Force reflow to ensure display change takes effect
                             item.offsetHeight;
                             
                             item.style.opacity = '1';
@@ -553,17 +780,18 @@ async function fadeInIngredientItems(items) {
                                 item.style.transition = '';
                                 item.style.transform = '';
                                 itemResolve();
-                            }, 300);
-                        }, index * 20); // Reduced from 40ms to 20ms
+                            }, INVENTORY_CONFIG.ANIMATION.FADE_DURATION); // Use same duration as products
+                        }, totalDelay);
                     });
                 });
                 
                 await Promise.all(itemPromises);
                 resolve();
-            }, batchIndex * 60);
+            }, batchIndex * 10); // Reduced batch delay for faster animation start
         });
     });
     
+    // Wait for all batches to complete
     await Promise.all(batchPromises);
 }
 
@@ -574,20 +802,7 @@ async function fadeInIngredientItems(items) {
 function showNoIngredientsMessage(ingredientsList) {
     removeNoIngredientsMessage();
     
-    const emptyMessage = document.createElement('div');
-    emptyMessage.className = 'no-ingredients-message';
-    emptyMessage.style.cssText = `
-        text-align: center;
-        padding: 40px 20px;
-        color: var(--text-gray);
-        font-style: italic;
-    `;
-    emptyMessage.innerHTML = `
-        <h3>No Ingredients Found</h3>
-        <p>No ingredients match your search criteria.</p>
-    `;
-    
-    ingredientsList.appendChild(emptyMessage);
+    // No message displayed - just clean the container
 }
 
 /**
