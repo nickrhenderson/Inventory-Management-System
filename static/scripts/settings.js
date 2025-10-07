@@ -205,18 +205,30 @@ async function installUpdate() {
         const response = await pywebview.api.install_update(downloadedFilePath);
         
         if (response.success) {
-            statusDiv.className = 'update-status info';
-            statusDiv.textContent = 'Update installed successfully! Application will restart...';
+            statusDiv.className = 'update-status success';
+            statusDiv.innerHTML = `
+                <strong>Update Installed Successfully!</strong><br>
+                Application is restarting with fresh styling...
+            `;
             
-            // The application should restart automatically
-            // If it doesn't, show a message after a few seconds
+            // Show final message briefly, then the app should close
             setTimeout(() => {
                 statusDiv.innerHTML = `
-                    <strong>Update installed!</strong><br>
-                    If the application doesn't restart automatically, 
-                    please close it manually and restart.
+                    <strong>Restarting...</strong><br>
+                    The application will restart automatically with updated styling.
                 `;
-            }, 5000);
+            }, 2000);
+            
+            // If for some reason the app doesn't close, show fallback message
+            setTimeout(() => {
+                if (document.body) {  // Check if we're still running
+                    statusDiv.innerHTML = `
+                        <strong>Please restart manually</strong><br>
+                        If the application doesn't restart automatically, 
+                        please close it and restart to see the updates.
+                    `;
+                }
+            }, 8000);
             
         } else {
             throw new Error(response.error || 'Installation failed');
@@ -268,6 +280,42 @@ function formatFileSize(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Force refresh application cache
+ */
+async function refreshApplicationCache() {
+    const refreshBtn = document.getElementById('refreshCacheBtn');
+    
+    const confirmed = confirm(
+        'This will restart the application to refresh the cache. ' +
+        'Make sure you have saved any important work. Continue?'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing...';
+    
+    try {
+        const response = await pywebview.api.force_refresh_cache();
+        
+        if (response.success) {
+            // Show success message briefly before restart
+            refreshBtn.textContent = 'Restarting...';
+            // The app should close and restart automatically
+        } else {
+            throw new Error(response.error || 'Failed to refresh cache');
+        }
+    } catch (error) {
+        console.error('Error refreshing cache:', error);
+        alert(`Failed to refresh cache: ${error.message}`);
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Refresh Cache';
+    }
 }
 
 /**

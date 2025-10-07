@@ -3,9 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Inventory System</title>
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
+    <script>
+        // Force CSS refresh on load to prevent caching issues
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get all stylesheets and force reload with timestamp
+            const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
+            const timestamp = Date.now();
+            
+            stylesheets.forEach(function(link) {
+                const href = link.href;
+                // Remove existing timestamp parameters
+                const baseHref = href.split('?')[0];
+                // Add new timestamp to force refresh
+                link.href = baseHref + '?v=0.2.0&t=' + timestamp;
+            });
+            
+            console.log('CSS cache refresh applied with timestamp:', timestamp);
+        });
+    </script>
 </head>
 <body>
     <!-- Top Navigation Bar -->
@@ -41,6 +62,9 @@
                 <div class="setting-item">
                     <div class="version-info">
                         <span>Current Version: <span id="currentVersion">Loading...</span></span>
+                        <small style="display: block; color: #666; margin-top: 4px;">
+                            Cache Version: <span id="cacheVersion">0.2.0</span>
+                        </small>
                     </div>
                     <div class="update-controls">
                         <button id="checkUpdateBtn" class="btn btn-primary" onclick="checkForUpdates()">
@@ -62,6 +86,17 @@
                             <span id="progressText">Downloading...</span>
                         </div>
                     </div>
+                </div>
+            </div>
+            
+            <!-- Cache Management Section -->
+            <div class="setting-section">
+                <h4>Cache Management</h4>
+                <div class="setting-item">
+                    <p>If styling appears outdated after updates, you can force refresh the application cache.</p>
+                    <button id="refreshCacheBtn" class="btn btn-secondary" onclick="refreshApplicationCache()">
+                        Refresh Cache
+                    </button>
                 </div>
             </div>
             
