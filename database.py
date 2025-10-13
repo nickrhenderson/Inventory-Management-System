@@ -134,11 +134,20 @@ class DatabaseManager:
 					date_mixed DATE NOT NULL,
 					total_quantity REAL DEFAULT 0.0,
 					total_cost REAL DEFAULT 0.0,
+					amount INTEGER DEFAULT 0,
 					notes TEXT,
 					date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
 					last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
 				)
 			''')
+			
+			# Add amount column to existing products table if it doesn't exist
+			try:
+				conn.execute('ALTER TABLE products ADD COLUMN amount INTEGER DEFAULT 0')
+				print("Added 'amount' column to products table")
+			except sqlite3.OperationalError:
+				# Column already exists
+				pass
 			
 			# Create product_ingredients junction table (many-to-many relationship)
 			conn.execute('''
@@ -234,7 +243,7 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, notes, date_added
+				       total_quantity, total_cost, amount, notes, date_added
 				FROM products 
 				ORDER BY date_mixed DESC, date_added DESC
 			''')
@@ -351,7 +360,7 @@ class DatabaseManager:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.execute('''
 				SELECT DISTINCT p.id, p.barcode_id, p.product_name, p.batch_number, p.date_mixed, 
-				       p.total_quantity, p.total_cost, p.notes, p.date_added
+				       p.total_quantity, p.total_cost, p.amount, p.notes, p.date_added
 				FROM products p
 				JOIN product_ingredients pi ON p.id = pi.product_id
 				JOIN ingredients i ON pi.ingredient_id = i.id
@@ -367,7 +376,7 @@ class DatabaseManager:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.execute('''
 				SELECT DISTINCT p.id, p.barcode_id, p.product_name, p.batch_number, p.date_mixed, 
-				       p.total_quantity, p.total_cost, p.notes, p.date_added
+				       p.total_quantity, p.total_cost, p.amount, p.notes, p.date_added
 				FROM products p
 				JOIN product_ingredients pi ON p.id = pi.product_id
 				JOIN ingredients i ON pi.ingredient_id = i.id
@@ -395,7 +404,7 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, notes, date_added
+				       total_quantity, total_cost, amount, notes, date_added
 				FROM products 
 				WHERE id = ?
 			''', (product_id,))
@@ -417,6 +426,13 @@ class DatabaseManager:
 	def update_product(self, product_data):
 		"""Update an existing product with new ingredient data"""
 		try:
+			# Validate that at least one ingredient is provided
+			if not product_data.get('ingredients') or len(product_data['ingredients']) == 0:
+				return {
+					"success": False,
+					"message": "Please select at least one ingredient for the product"
+				}
+			
 			with self._get_db_connection() as conn:
 				product_id = product_data['id']
 				mixed_date = self._parse_date(product_data['mixed_date'], datetime.now().date())
@@ -426,12 +442,13 @@ class DatabaseManager:
 				if not existing_product:
 					return self._error_response("Product not found")
 				
-				# Update product basic info (allow name and mixed date changes)
+				# Update product basic info (allow name, mixed date, and amount changes)
+				amount = int(product_data.get('amount', 0))
 				conn.execute('''
 					UPDATE products 
-					SET product_name = ?, date_mixed = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
+					SET product_name = ?, date_mixed = ?, amount = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
 					WHERE id = ?
-				''', (product_data['product_name'], mixed_date, "Updated via product edit modal", product_id))
+				''', (product_data['product_name'], mixed_date, amount, "Updated via product edit modal", product_id))
 				
 				# Delete existing product-ingredient relationships
 				conn.execute('DELETE FROM product_ingredients WHERE product_id = ?', (product_id,))
@@ -476,6 +493,64 @@ class DatabaseManager:
 		except Exception as e:
 			return self._error_response(e)
 	
+	def adjust_product_amount(self, product_id, delta):
+		"""Adjust product amount by the specified delta"""
+		try:
+			with self._get_db_connection() as conn:
+				# Get current amount
+				current_product = conn.execute('SELECT amount FROM products WHERE id = ?', (product_id,)).fetchone()
+				if not current_product:
+					return self._error_response("Product not found")
+				
+				current_amount = current_product[0] or 0
+				new_amount = max(0, current_amount + delta)  # Prevent negative amounts
+				
+				# Update the amount
+				conn.execute('''
+					UPDATE products 
+					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
+					WHERE id = ?
+				''', (new_amount, product_id))
+				
+				conn.commit()
+				
+				return self._success_response(
+					"Product amount updated successfully",
+					new_amount=new_amount
+				)
+				
+		except Exception as e:
+			return self._error_response(e)
+
+	def update_product_amount(self, product_id, new_amount):
+		"""Update product amount to a specific value"""
+		try:
+			with self._get_db_connection() as conn:
+				# Verify product exists
+				existing_product = conn.execute('SELECT id FROM products WHERE id = ?', (product_id,)).fetchone()
+				if not existing_product:
+					return self._error_response("Product not found")
+				
+				# Ensure amount is non-negative
+				amount = max(0, int(new_amount))
+				
+				# Update the amount
+				conn.execute('''
+					UPDATE products 
+					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
+					WHERE id = ?
+				''', (amount, product_id))
+				
+				conn.commit()
+				
+				return self._success_response(
+					"Product amount updated successfully",
+					new_amount=amount
+				)
+				
+		except Exception as e:
+			return self._error_response(e)
+
 	def update_ingredient(self, ingredient_data):
 		"""Update an existing ingredient (barcode cannot be changed)"""
 		try:
@@ -538,18 +613,27 @@ class DatabaseManager:
 	def create_product(self, product_data):
 		"""Create a new product with ingredients"""
 		try:
+			# Validate that at least one ingredient is provided
+			if not product_data.get('ingredients') or len(product_data['ingredients']) == 0:
+				return {
+					"success": False,
+					"message": "Please select at least one ingredient for the product"
+				}
+			
 			with self._get_db_connection() as conn:
 				mixed_date = self._parse_date(product_data['mixed_date'], datetime.now().date())
+				amount = int(product_data.get('amount', 0))
 				
 				# Insert product
 				cursor = conn.execute('''
-					INSERT INTO products (barcode_id, product_name, batch_number, date_mixed, notes)
-					VALUES (?, ?, ?, ?, ?)
+					INSERT INTO products (barcode_id, product_name, batch_number, date_mixed, amount, notes)
+					VALUES (?, ?, ?, ?, ?, ?)
 				''', (
 					self.generate_product_barcode(),
 					product_data['product_name'],
 					self.generate_batch_number(),
 					mixed_date,
+					amount,
 					"Created via product creation modal"
 				))
 				

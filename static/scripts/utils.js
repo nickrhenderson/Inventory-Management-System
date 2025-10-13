@@ -105,11 +105,11 @@ function generateBarcodePattern(pattern) {
 
 /**
  * Format currency value
- * @param {number} value - Numeric value to format
+ * @param {number} value - Currency value
  * @param {number} decimals - Number of decimal places
  * @returns {string} Formatted currency string
  */
-function formatCurrency(value, decimals = 2) {
+function formatCurrency(value, decimals = 3) {
     return `$${parseFloat(value).toFixed(decimals)}`;
 }
 
@@ -156,8 +156,9 @@ function formatDate(date) {
  * @param {string} confirmText - Confirm button text
  * @param {boolean} isUnflag - Whether this is an unflag action
  * @param {Function} onConfirm - Callback function on confirmation
+ * @param {Function} onCancel - Callback function on cancellation (optional)
  */
-function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm) {
+function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm, onCancel) {
     // Remove existing modal if any
     const existingModal = document.querySelector('.confirmation-modal-backdrop');
     if (existingModal) {
@@ -167,12 +168,12 @@ function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm)
     const confirmButtonClass = isUnflag ? 'unflag' : 'confirm';
     
     const modalHTML = `
-        <div class="modal-backdrop confirmation-modal-backdrop" id="confirmationModal" onclick="hideConfirmationModal()">
+        <div class="modal-backdrop confirmation-modal-backdrop" id="confirmationModal" onclick="cancelAction()">
             <div class="modal-content confirmation-modal" onclick="event.stopPropagation()">
                 <h3>${title}</h3>
                 <p>${message}</p>
                 <div class="confirmation-modal-buttons">
-                    <button class="confirmation-modal-button cancel" onclick="hideConfirmationModal()">
+                    <button class="confirmation-modal-button cancel" onclick="cancelAction()">
                         Cancel
                     </button>
                     <button class="confirmation-modal-button ${confirmButtonClass}" onclick="confirmAction()">
@@ -185,8 +186,9 @@ function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm)
     
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     
-    // Store the confirm action
+    // Store the confirm and cancel actions
     window.currentConfirmAction = onConfirm;
+    window.currentCancelAction = onCancel;
     
     // Show modal with animation
     setTimeout(() => {
@@ -207,8 +209,19 @@ function hideConfirmationModal() {
         setTimeout(() => {
             modal.remove();
             window.currentConfirmAction = null;
+            window.currentCancelAction = null;
         }, 300);
     }
+}
+
+/**
+ * Handle cancel action in modal
+ */
+function cancelAction() {
+    if (window.currentCancelAction) {
+        window.currentCancelAction();
+    }
+    hideConfirmationModal();
 }
 
 /**
@@ -238,6 +251,7 @@ async function confirmAction() {
     if (window.currentConfirmAction) {
         await window.currentConfirmAction();
         window.currentConfirmAction = null;
+        window.currentCancelAction = null;
         
         // Auto-close modal faster after action completes
         setTimeout(() => {

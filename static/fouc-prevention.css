@@ -1,0 +1,37 @@
+/* Prevent FOUC (Flash of Unstyled Content) */
+html {
+    visibility: hidden;
+    opacity: 0;
+}
+
+html.loaded {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+/* Hide all images and SVGs until page is fully loaded */
+img, svg {
+    opacity: 0 !important;
+    transition: opacity 0.3s ease !important;
+}
+
+html.loaded img,
+html.loaded svg {
+    opacity: 1 !important;
+}
+
+/* Ensure modals and overlays are initially hidden */
+.modal-backdrop,
+.settings-backdrop,
+.creation-modal-backdrop,
+.confirmation-modal-backdrop {
+    display: none !important;
+}
+
+.modal-backdrop.open,
+.settings-backdrop.open,
+.creation-modal-backdrop.open,
+.confirmation-modal-backdrop.open {
+    display: flex !important;
+}

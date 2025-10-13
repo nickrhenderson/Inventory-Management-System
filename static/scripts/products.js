@@ -104,6 +104,9 @@ function displayProductsTable(data) {
     
     initializeSearch();
     animateProductsRows(allProductsData);
+    
+    // Ensure amount change detection is initialized
+    initializeAmountChangeDetection();
 }
 
 /**
@@ -120,6 +123,7 @@ function createProductsTableHTML() {
                     <th>Date Mixed</th>
                     <th>Total Cost</th>
                     <th>Quantity</th>
+                    <th>Amount</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -163,6 +167,7 @@ async function createProductRow(product, index) {
     const dateMixed = formatDate(product.date_mixed);
     const totalCost = formatCurrency(product.total_cost);
     const totalQuantity = formatQuantity(product.total_quantity);
+    const amount = product.amount || 0;
     
     row.innerHTML = `
         <td><strong>${product.product_name}</strong></td>
@@ -170,6 +175,36 @@ async function createProductRow(product, index) {
         <td>${dateMixed}</td>
         <td class="price">${totalCost}</td>
         <td class="quantity">${totalQuantity}</td>
+        <td class="amount">
+            <div class="amount-controls">
+                <button class="amount-button minus" 
+                        onclick="event.stopPropagation(); adjustProductAmountLocal(${product.id}, -1)"
+                        title="Decrease amount">
+                    <div class="amount-icon">
+                        <img src="static/img/svg/minus.svg" alt="Decrease" />
+                    </div>
+                </button>
+                <input type="number" 
+                       class="amount-input" 
+                       value="${amount}" 
+                       min="0" 
+                       step="1"
+                       data-product-id="${product.id}"
+                       data-product-name="${product.product_name.replace(/"/g, '&quot;')}"
+                       data-original-amount="${amount}"
+                       onclick="event.stopPropagation()"
+                       onchange="handleAmountInputChange(this)"
+                       onblur="handleAmountInputBlur(this)"
+                       onfocus="handleAmountInputFocus(this)">
+                <button class="amount-button plus" 
+                        onclick="event.stopPropagation(); adjustProductAmountLocal(${product.id}, 1)"
+                        title="Increase amount">
+                    <div class="amount-icon">
+                        <img src="static/img/svg/plus.svg" alt="Increase" />
+                    </div>
+                </button>
+            </div>
+        </td>
         <td>
             <div class="product-actions">
                 <button class="product-edit-button" 
@@ -352,6 +387,222 @@ async function editProduct(productId) {
         console.error('Error loading product for edit:', error);
         alert('Failed to load product data for editing.');
     }
+}
+
+// Global variable to track current editing state
+let currentEditingProductId = null;
+let pendingAmountChanges = new Map(); // productId -> {originalAmount, newAmount, productName}
+let amountChangeDetectionInitialized = false;
+
+/**
+ * Start editing session for a product
+ * @param {number} productId - ID of the product
+ * @param {HTMLInputElement} amountInput - The amount input element
+ */
+function startEditingSession(productId, amountInput) {
+    // If switching to a different product, check for pending changes on the previous one
+    if (currentEditingProductId !== null && currentEditingProductId !== productId) {
+        checkForPendingChanges(currentEditingProductId);
+    }
+    
+    currentEditingProductId = productId;
+    
+    // Store original amount if not already stored
+    if (!pendingAmountChanges.has(productId)) {
+        const originalAmount = parseInt(amountInput.dataset.originalAmount) || 0;
+        pendingAmountChanges.set(productId, {
+            originalAmount: originalAmount,
+            newAmount: parseInt(amountInput.value) || 0,
+            productName: amountInput.dataset.productName
+        });
+    }
+}
+
+/**
+ * Adjust product amount locally (no API call yet)
+ * @param {number} productId - ID of the product to adjust
+ * @param {number} delta - Amount to add/subtract (1 or -1)
+ */
+function adjustProductAmountLocal(productId, delta) {
+    const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+    if (!row) return;
+    
+    const amountInput = row.querySelector('.amount-input');
+    if (!amountInput) return;
+    
+    // Start editing session
+    startEditingSession(productId, amountInput);
+    
+    const currentValue = parseInt(amountInput.value) || 0;
+    const newValue = Math.max(0, currentValue + delta); // Prevent negative values
+    
+    amountInput.value = newValue;
+    handleAmountInputChange(amountInput);
+}
+
+/**
+ * Handle amount input focus
+ * @param {HTMLInputElement} input - The amount input element
+ */
+function handleAmountInputFocus(input) {
+    const productId = parseInt(input.dataset.productId);
+    startEditingSession(productId, input);
+}
+
+/**
+ * Handle amount input change
+ * @param {HTMLInputElement} input - The amount input element
+ */
+function handleAmountInputChange(input) {
+    const productId = parseInt(input.dataset.productId);
+    const newAmount = Math.max(0, parseInt(input.value) || 0); // Ensure non-negative
+    input.value = newAmount; // Update display to show corrected value
+    
+    // Update pending change
+    if (pendingAmountChanges.has(productId)) {
+        const change = pendingAmountChanges.get(productId);
+        change.newAmount = newAmount;
+    }
+}
+
+/**
+ * Handle amount input blur - but only if not clicking on amount controls
+ * @param {HTMLInputElement} input - The amount input element
+ */
+function handleAmountInputBlur(input) {
+    // Don't immediately trigger confirmation - let the global click handler manage it
+    // This prevents premature confirmation when clicking between plus/minus buttons
+}
+
+/**
+ * Check for pending changes and show confirmation if needed
+ * @param {number} productId - ID of the product to check
+ */
+function checkForPendingChanges(productId) {
+    if (!pendingAmountChanges.has(productId)) {
+        currentEditingProductId = null;
+        return;
+    }
+    
+    const change = pendingAmountChanges.get(productId);
+    
+    // Only show confirmation if there's actually a change
+    if (change.originalAmount !== change.newAmount) {
+        showAmountChangeConfirmation(productId, change);
+    } else {
+        // No change, just clean up
+        pendingAmountChanges.delete(productId);
+        currentEditingProductId = null;
+    }
+}
+
+/**
+ * Show confirmation modal for amount changes
+ * @param {number} productId - ID of the product
+ * @param {Object} change - Change object with originalAmount, newAmount, productName
+ */
+function showAmountChangeConfirmation(productId, change) {
+    showConfirmationModal(
+        'Confirm Amount Change',
+        `Confirm your change for "${change.productName}" amount from ${change.originalAmount} to ${change.newAmount}.`,
+        'Confirm',
+        false, // Not a delete action
+        async () => {
+            // User confirmed - apply the change
+            try {
+                const result = await pywebview.api.update_product_amount(productId, change.newAmount);
+                
+                if (result.success) {
+                    // Update the original amount to the new value
+                    const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+                    if (row) {
+                        const amountInput = row.querySelector('.amount-input');
+                        if (amountInput) {
+                            amountInput.dataset.originalAmount = change.newAmount.toString();
+                        }
+                    }
+                    
+                    // Clean up pending changes
+                    pendingAmountChanges.delete(productId);
+                    currentEditingProductId = null;
+                } else {
+                    throw new Error(result.message || 'Failed to update product amount');
+                }
+            } catch (error) {
+                console.error('Error updating product amount:', error);
+                alert('Failed to update product amount. Please try again.');
+                
+                // Revert the input to original value from database
+                revertAmountToOriginal(productId);
+            }
+        },
+        () => {
+            // User cancelled or closed modal - revert the change to database value
+            revertAmountToOriginal(productId);
+        }
+    );
+}
+
+/**
+ * Revert amount input to original database value
+ * @param {number} productId - ID of the product
+ */
+function revertAmountToOriginal(productId) {
+    const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+    if (row) {
+        const amountInput = row.querySelector('.amount-input');
+        if (amountInput && pendingAmountChanges.has(productId)) {
+            const change = pendingAmountChanges.get(productId);
+            amountInput.value = change.originalAmount;
+        }
+    }
+    
+    // Clean up pending changes
+    pendingAmountChanges.delete(productId);
+    currentEditingProductId = null;
+}
+
+/**
+ * Initialize global click handler for amount change detection
+ */
+function initializeAmountChangeDetection() {
+    // Prevent duplicate initialization
+    if (amountChangeDetectionInitialized) return;
+    
+    document.addEventListener('click', function(event) {
+        // Check if we have an active editing session
+        if (currentEditingProductId === null) return;
+        
+        const clickTarget = event.target;
+        
+        // Check if click is on amount controls for the currently editing product
+        const currentRow = document.querySelector(`tr[data-product-id="${currentEditingProductId}"]`);
+        if (!currentRow) return;
+        
+        const amountControls = currentRow.querySelector('.amount-controls');
+        if (!amountControls) return;
+        
+        // Check if the click is within the amount controls
+        const isClickInAmountControls = amountControls.contains(clickTarget) || 
+                                       clickTarget.closest('.amount-controls') === amountControls;
+        
+        // If click is outside amount controls, trigger confirmation
+        if (!isClickInAmountControls) {
+            checkForPendingChanges(currentEditingProductId);
+        }
+    });
+    
+    amountChangeDetectionInitialized = true;
+}
+
+// Initialize the click detection when the page loads
+document.addEventListener('DOMContentLoaded', initializeAmountChangeDetection);
+
+// Also initialize immediately if DOM is already ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAmountChangeDetection);
+} else {
+    initializeAmountChangeDetection();
 }
 
 /**

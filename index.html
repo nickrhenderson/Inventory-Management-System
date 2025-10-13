@@ -7,6 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Inventory System</title>
+    <link rel="stylesheet" href="static/fouc-prevention.css">
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
     <script>
@@ -25,6 +26,18 @@
             });
             
             console.log('CSS cache refresh applied with timestamp:', timestamp);
+            
+            // Wait for styles to load, then show page to prevent FOUC
+            setTimeout(function() {
+                document.documentElement.classList.add('loaded');
+            }, 100);
+        });
+        
+        // Fallback in case DOMContentLoaded doesn't fire
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.documentElement.classList.add('loaded');
+            }, 50);
         });
     </script>
 </head>
@@ -162,6 +175,10 @@
                     <input type="date" id="mixedDate" name="mixedDate" required>
                 </div>
                 <div class="form-group">
+                    <label for="productAmount">Number of Batches Produced:</label>
+                    <input type="number" id="productAmount" name="productAmount" min="0" step="1" value="1" required>
+                </div>
+                <div class="form-group">
                     <label for="barcodeScanner">Scan Ingredient Barcode:</label>
                     <input type="text" id="barcodeScanner" name="barcodeScanner" placeholder="Scan or type barcode..." autocomplete="off">
                     <div class="barcode-status" id="barcodeStatus"></div>
@@ -192,7 +209,7 @@
                 </div>
                 <div class="form-group">
                     <label for="ingredientUnitCost">Unit Cost (per gram) ($):</label>
-                    <input type="number" id="ingredientUnitCost" name="ingredientUnitCost" step="0.01" min="0" required>
+                    <input type="number" id="ingredientUnitCost" name="ingredientUnitCost" step="0.001" min="0" required>
                 </div>
                 <div class="form-group">
                     <label for="ingredientPurchaseDate">Purchase Date:</label>

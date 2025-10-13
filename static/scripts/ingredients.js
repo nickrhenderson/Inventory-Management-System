@@ -70,37 +70,43 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
     const purchaseDate = formatDate(ingredient.purchase_date);
     const expirationDate = formatDate(ingredient.expiration_date);
     
-    // Create delete button HTML only if showDeleteButton is true
-    const deleteButtonHTML = showDeleteButton ? `
-        <button class="ingredient-delete-button" 
-                onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}')"
-                title="Delete Ingredient">
-            <div class="delete-icon">
-                <img src="static/img/svg/trash.svg" alt="Delete" />
+    // Create menu items based on available actions
+    const menuItems = [
+        `<div class="ingredient-menu-item" onclick="editIngredient(${ingredient.id}); closeIngredientMenu(${ingredient.id})">
+            <img src="static/img/svg/edit.svg" alt="Edit" class="menu-icon" />
+            <span>Edit Ingredient</span>
+        </div>`,
+        `<div class="ingredient-menu-item" onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged}); closeIngredientMenu(${ingredient.id})">
+            <div class="flag-icon menu-icon">
+                <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
+                </svg>
             </div>
-        </button>
-    ` : '';
+            <span>${isFlagged ? 'Remove Flag' : 'Flag Ingredient'}</span>
+        </div>`
+    ];
+    
+    // Add delete button if applicable
+    if (showDeleteButton) {
+        menuItems.push(`<div class="ingredient-menu-item danger" onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}'); closeIngredientMenu(${ingredient.id})">
+            <img src="static/img/svg/trash.svg" alt="Delete" class="menu-icon" />
+            <span>Delete Ingredient</span>
+        </div>`);
+    }
     
     return `
         <div class="ingredient-item${flaggedClass}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
-                <button class="ingredient-edit-button" 
-                        onclick="editIngredient(${ingredient.id})"
-                        title="Edit Ingredient">
-                    <div class="edit-icon">
-                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                <div class="ingredient-menu-container">
+                    <button class="ingredient-menu-button" 
+                            onclick="toggleIngredientMenu(${ingredient.id})"
+                            title="More actions">
+                        <img src="static/img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
+                    </button>
+                    <div class="ingredient-menu" id="ingredientMenu${ingredient.id}">
+                        ${menuItems.join('')}
                     </div>
-                </button>
-                <button class="ingredient-flag-button${flaggedButtonClass}" 
-                        onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
-                        title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
-                    <div class="flag-icon">
-                        <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
-                        </svg>
-                    </div>
-                </button>
-                ${deleteButtonHTML}
+                </div>
             </div>
             <div class="ingredient-header">
                 <strong>${ingredient.name}</strong>
@@ -253,32 +259,39 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
     const purchaseDate = formatDate(ingredient.purchase_date);
     const expirationDate = formatDate(ingredient.expiration_date);
     
+    // Create menu items for all ingredient actions
+    const menuItems = [
+        `<div class="ingredient-menu-item" onclick="editIngredient(${ingredient.id}); closeIngredientMenu(${ingredient.id})">
+            <img src="static/img/svg/edit.svg" alt="Edit" class="menu-icon" />
+            <span>Edit Ingredient</span>
+        </div>`,
+        `<div class="ingredient-menu-item" onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged}); closeIngredientMenu(${ingredient.id})">
+            <div class="flag-icon menu-icon">
+                <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
+                </svg>
+            </div>
+            <span>${isFlagged ? 'Remove Flag' : 'Flag Ingredient'}</span>
+        </div>`,
+        `<div class="ingredient-menu-item danger" onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}'); closeIngredientMenu(${ingredient.id})">
+            <img src="static/img/svg/trash.svg" alt="Delete" class="menu-icon" />
+            <span>Delete Ingredient</span>
+        </div>`
+    ];
+    
     return `
         <div class="ingredient-item all-ingredient${flaggedClass}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
-                <button class="ingredient-edit-button" 
-                        onclick="editIngredient(${ingredient.id})"
-                        title="Edit Ingredient">
-                    <div class="edit-icon">
-                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                <div class="ingredient-menu-container">
+                    <button class="ingredient-menu-button" 
+                            onclick="toggleIngredientMenu(${ingredient.id})"
+                            title="More actions">
+                        <img src="static/img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
+                    </button>
+                    <div class="ingredient-menu" id="ingredientMenu${ingredient.id}">
+                        ${menuItems.join('')}
                     </div>
-                </button>
-                <button class="ingredient-flag-button${flaggedButtonClass}" 
-                        onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged})"
-                        title="${isFlagged ? 'Remove flag' : 'Flag Ingredient'}">
-                    <div class="flag-icon">
-                        <svg viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M425.4,135.441h-84.044v-30.562c0-9.042-7.33-16.373-16.372-16.373H128.519V76.407c8.224-0.869,14.633-7.824,14.633-16.278c0-6.64-3.96-12.344-9.64-14.913c2.382-4.352,3.739-9.345,3.739-14.656C137.251,13.683,123.567,0,106.689,0C89.811,0,76.129,13.683,76.129,30.561c0,5.311,1.357,10.304,3.739,14.656c-5.68,2.569-9.64,8.273-9.64,14.913c0,8.454,6.409,15.408,14.633,16.278v413.764c0,12.056,9.773,21.829,21.829,21.829s21.829-9.773,21.829-21.829V288.247h62.214v30.561c0,9.042,7.33,16.372,16.373,16.372H425.4c9.042,0,16.372-7.33,16.372-16.372V151.813C441.772,142.771,434.443,135.441,425.4,135.441z"/>
-                        </svg>
-                    </div>
-                </button>
-                <button class="ingredient-delete-button" 
-                        onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}')"
-                        title="Delete Ingredient">
-                    <div class="delete-icon">
-                        <img src="static/img/svg/trash.svg" alt="Delete" />
-                    </div>
-                </button>
+                </div>
             </div>
             <div class="ingredient-header">
                 <strong>${ingredient.name}</strong>
@@ -286,7 +299,7 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
             <div class="ingredient-details">
                 <div class="ingredient-unit-cost">
                     <span class="label">Unit Cost:</span>
-                    <span class="value">${formatCurrency(unitCost)} per gram</span>
+                    <span class="value">${formatCurrency(unitCost)}/g</span>
                 </div>
                 <div class="ingredient-dates">
                     <div>
@@ -484,3 +497,76 @@ function showIngredientsLoading(message = 'Loading...') {
     // Set appropriate title for loading state
     updateIngredientsTitle('Loading...', false);
 }
+
+/**
+ * Toggle the visibility of an ingredient's action menu
+ * @param {number} ingredientId - ID of the ingredient
+ */
+function toggleIngredientMenu(ingredientId) {
+    const menu = document.getElementById(`ingredientMenu${ingredientId}`);
+    const button = document.querySelector(`[onclick="toggleIngredientMenu(${ingredientId})"]`);
+    const allMenus = document.querySelectorAll('.ingredient-menu');
+    const allButtons = document.querySelectorAll('.ingredient-menu-button');
+    
+    // Close all other menus first and remove active class from other buttons
+    allMenus.forEach(otherMenu => {
+        if (otherMenu.id !== `ingredientMenu${ingredientId}`) {
+            otherMenu.classList.remove('show');
+        }
+    });
+    
+    allButtons.forEach(otherButton => {
+        if (otherButton !== button) {
+            otherButton.classList.remove('active');
+        }
+    });
+    
+    // Toggle the clicked menu and button active state
+    if (menu && button) {
+        const isShowing = menu.classList.toggle('show');
+        if (isShowing) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    }
+}
+
+/**
+ * Close a specific ingredient menu
+ * @param {number} ingredientId - ID of the ingredient
+ */
+function closeIngredientMenu(ingredientId) {
+    const menu = document.getElementById(`ingredientMenu${ingredientId}`);
+    const button = document.querySelector(`[onclick="toggleIngredientMenu(${ingredientId})"]`);
+    if (menu) {
+        menu.classList.remove('show');
+    }
+    if (button) {
+        button.classList.remove('active');
+    }
+}
+
+/**
+ * Close all ingredient menus
+ */
+function closeAllIngredientMenus() {
+    const allMenus = document.querySelectorAll('.ingredient-menu');
+    const allButtons = document.querySelectorAll('.ingredient-menu-button');
+    
+    allMenus.forEach(menu => {
+        menu.classList.remove('show');
+    });
+    
+    allButtons.forEach(button => {
+        button.classList.remove('active');
+    });
+}
+
+// Add event listener to close menus when clicking outside
+document.addEventListener('click', function(event) {
+    // Check if the click was outside any ingredient menu or menu button
+    if (!event.target.closest('.ingredient-menu-container')) {
+        closeAllIngredientMenus();
+    }
+});

@@ -11,7 +11,7 @@ import subprocess
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.3.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -96,6 +96,14 @@ class InventoryAPI:
 		"""Update an existing product with new ingredient data"""
 		return self.db_manager.update_product(product_data)
 	
+	def adjust_product_amount(self, product_id, delta):
+		"""Adjust product amount by the specified delta"""
+		return self.db_manager.adjust_product_amount(product_id, delta)
+
+	def update_product_amount(self, product_id, new_amount):
+		"""Update product amount to a specific value"""
+		return self.db_manager.update_product_amount(product_id, new_amount)
+
 	def update_ingredient(self, ingredient_data):
 		"""Update an existing ingredient (barcode cannot be changed)"""
 		return self.db_manager.update_ingredient(ingredient_data)
@@ -403,9 +411,9 @@ def main():
 	webview.create_window(
 		"Bad-Bandit IMS",
 		url=html_url,
-		width=1200,
+		width=1000,
 		height=720,
-		min_size=(1100, 125),
+		min_size=(1000, 125),
 		resizable=True,
 		js_api=api
 	)

@@ -41,6 +41,8 @@ async function openProductModal(productData = null, isEditMode = false) {
                 // Set default date to today for new products
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('mixedDate').value = today;
+                // Set default amount to 1 for new products
+                document.getElementById('productAmount').value = 1;
             }
             
             // Restore buttons in case they were hidden from previous use
@@ -114,6 +116,9 @@ async function populateProductForm(productData) {
     } else {
         document.getElementById('mixedDate').value = '';
     }
+    
+    // Fill amount field
+    document.getElementById('productAmount').value = productData.amount || 0;
     
     // Allow editing of both product name and mixed date in edit mode
     document.getElementById('productName').readOnly = false;
@@ -629,10 +634,10 @@ async function handleProductSubmission(event) {
     
     console.log('Processing form submission...');
     
+    // Check if we're in edit mode
+    const isEditMode = window.editingProductData !== null;
+    
     try {
-        // Check if we're in edit mode
-        const isEditMode = window.editingProductData !== null;
-        
         // Disable submit button
         submitButton.disabled = true;
         submitButton.textContent = isEditMode ? 'Updating...' : 'Creating...';
@@ -665,6 +670,12 @@ async function handleProductSubmission(event) {
         
     } catch (error) {
         console.error(isEditMode ? 'Error updating product:' : 'Error creating product:', error);
+        
+        // Always reset button state on any error, including validation errors
+        submitButton.disabled = false;
+        submitButton.textContent = isEditMode ? 'Update Product' : 'Add Product';
+        submitButton.className = 'modal-button submit';
+        
         if (isEditMode) {
             handleProductUpdateError(submitButton, barcodeResult, error.message);
         } else {
@@ -682,9 +693,16 @@ async function handleProductSubmission(event) {
 function collectProductFormData() {
     const productName = document.getElementById('productName').value.trim();
     const mixedDate = document.getElementById('mixedDate').value;
+    const amount = parseInt(document.getElementById('productAmount').value) || 0;
     
     console.log('Product name:', productName);
     console.log('Mixed date:', mixedDate);
+    console.log('Amount:', amount);
+    
+    // Validate amount
+    if (amount < 0) {
+        throw new Error('Number of batches cannot be negative');
+    }
     
     // Collect selected ingredients with quantities
     const selectedIngredients = [];
@@ -716,6 +734,7 @@ function collectProductFormData() {
     return {
         product_name: productName,
         mixed_date: mixedDate,
+        amount: amount,
         ingredients: selectedIngredients
     };
 }
@@ -762,10 +781,7 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
  * @param {string} errorMessage - Error message
  */
 function handleProductCreationError(submitButton, barcodeResult, errorMessage) {
-    // Show error
-    submitButton.textContent = 'Failed';
-    submitButton.className = 'modal-button error';
-    
+    // Show error in result area
     barcodeResult.innerHTML = `
         <div style="color: #f44336; font-weight: 600;">Creation Failed</div>
         <div style="color: #666; font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
@@ -777,12 +793,7 @@ function handleProductCreationError(submitButton, barcodeResult, errorMessage) {
         barcodeResult.classList.add('show');
     }, 100);
     
-    // Reset button after delay
-    setTimeout(() => {
-        submitButton.textContent = 'Add Product';
-        submitButton.className = 'modal-button submit';
-        submitButton.disabled = false;
-    }, INVENTORY_CONFIG.ANIMATION.BUTTON_RESET_DELAY);
+    // Button state is already reset in the main error handler, so don't override it
 }
 
 /**
@@ -827,10 +838,7 @@ function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
  * @param {string} errorMessage - Error message
  */
 function handleProductUpdateError(submitButton, barcodeResult, errorMessage) {
-    // Show error
-    submitButton.textContent = 'Update Failed';
-    submitButton.className = 'modal-button error';
-    
+    // Show error in result area
     barcodeResult.innerHTML = `
         <div style="color: #f44336; font-weight: 600;">Update Failed</div>
         <div style="color: #666; font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
@@ -842,12 +850,7 @@ function handleProductUpdateError(submitButton, barcodeResult, errorMessage) {
         barcodeResult.classList.add('show');
     }, 100);
     
-    // Reset button after delay
-    setTimeout(() => {
-        submitButton.textContent = 'Update Product';
-        submitButton.className = 'modal-button submit';
-        submitButton.disabled = false;
-    }, INVENTORY_CONFIG.ANIMATION.BUTTON_RESET_DELAY);
+    // Button state is already reset in the main error handler, so don't override it
 }
 
 // ==== INGREDIENT MODAL FUNCTIONS ====
