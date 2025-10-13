@@ -11,33 +11,64 @@
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
     <script>
-        // Force CSS refresh on load to prevent caching issues
+        // Check if we need to force a complete cache clear (after updates)
+        const urlParams = new URLSearchParams(window.location.search);
+        const forceCacheClear = urlParams.get('clear-cache') === 'true';
+        
+        // Force complete resource refresh on load to prevent caching issues
         document.addEventListener('DOMContentLoaded', function() {
-            // Get all stylesheets and force reload with timestamp
-            const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
             const timestamp = Date.now();
             
+            // Force reload all CSS files
+            const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
             stylesheets.forEach(function(link) {
                 const href = link.href;
-                // Remove existing timestamp parameters
                 const baseHref = href.split('?')[0];
-                // Add new timestamp to force refresh
-                link.href = baseHref + '?v=0.2.0&t=' + timestamp;
+                // Use different cache busting strategy for updates vs normal loads
+                if (forceCacheClear) {
+                    link.href = baseHref + '?force-reload=' + timestamp;
+                } else {
+                    link.href = baseHref + '?v=0.3.0&t=' + timestamp;
+                }
             });
             
-            console.log('CSS cache refresh applied with timestamp:', timestamp);
+            // Force reload all JavaScript files if cache clearing
+            if (forceCacheClear) {
+                const scripts = document.querySelectorAll('script[src]');
+                scripts.forEach(function(script) {
+                    if (script.src && !script.src.includes('data:')) {
+                        const src = script.src;
+                        const baseSrc = src.split('?')[0];
+                        const newScript = document.createElement('script');
+                        
+                        // Copy attributes
+                        if (script.defer) newScript.defer = true;
+                        if (script.async) newScript.async = true;
+                        
+                        newScript.src = baseSrc + '?force-reload=' + timestamp;
+                        
+                        // Replace old script
+                        script.parentNode.insertBefore(newScript, script);
+                        script.parentNode.removeChild(script);
+                    }
+                });
+                
+                console.log('Complete cache clear applied - all resources reloaded with timestamp:', timestamp);
+            } else {
+                console.log('CSS cache refresh applied with timestamp:', timestamp);
+            }
             
             // Wait for styles to load, then show page to prevent FOUC
             setTimeout(function() {
                 document.documentElement.classList.add('loaded');
-            }, 100);
+            }, forceCacheClear ? 200 : 100); // Longer delay for cache clearing
         });
         
         // Fallback in case DOMContentLoaded doesn't fire
         window.addEventListener('load', function() {
             setTimeout(function() {
                 document.documentElement.classList.add('loaded');
-            }, 50);
+            }, forceCacheClear ? 100 : 50);
         });
     </script>
 </head>

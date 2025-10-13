@@ -11,7 +11,7 @@ import subprocess
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -290,13 +290,15 @@ class InventoryAPI:
 echo Installing update...
 timeout /t 2 /nobreak > nul
 taskkill /f /im "{os.path.basename(current_exe)}" > nul 2>&1
-timeout /t 1 /nobreak > nul
+timeout /t 2 /nobreak > nul
 copy /y "{file_path}" "{current_exe}"
 if %errorlevel% equ 0 (
     echo Update installed successfully!
     del "{file_path}" > nul 2>&1
-    echo Restarting application...
-    start "" "{current_exe}" --clear-cache
+    echo Clearing application cache...
+    timeout /t 1 /nobreak > nul
+    echo Restarting application with fresh cache...
+    start "" "{current_exe}" --clear-cache --force-reload
     del "{batch_script}" > nul 2>&1
 ) else (
     echo Update failed!
@@ -347,7 +349,7 @@ echo Refreshing application cache...
 timeout /t 1 /nobreak > nul
 taskkill /f /im "{os.path.basename(current_exe)}" > nul 2>&1
 timeout /t 1 /nobreak > nul
-start "" "{current_exe}" --clear-cache
+start "" "{current_exe}" --clear-cache --force-reload
 del "{batch_script}" > nul 2>&1
 ''')
 				
@@ -402,11 +404,14 @@ def main():
 	# Use resource path function to handle both development and compiled versions
 	html_file = get_resource_path("index.html")
 	
-	# Get the HTML file URL (without parameters - they don't work with file:// URLs)
-	html_url = get_html_file_url(html_file)
-	
-	# Check for cache clearing flag (used after updates)
+	# Check for cache clearing flags (used after updates)
 	clear_cache = "--clear-cache" in sys.argv
+	force_reload = "--force-reload" in sys.argv
+	
+	# Get the HTML file URL with cache clearing parameter if needed
+	html_url = get_html_file_url(html_file)
+	if clear_cache or force_reload:
+		html_url += "?clear-cache=true"
 	
 	webview.create_window(
 		"Bad-Bandit IMS",
@@ -424,9 +429,12 @@ def main():
 	}
 	
 	# Use private mode when cache clearing is requested
-	if clear_cache:
+	if clear_cache or force_reload:
 		webview_config['private_mode'] = True
-		print("Starting with cache clearing enabled")
+		if force_reload:
+			print("Starting with forced resource reload after update")
+		else:
+			print("Starting with cache clearing enabled")
 	
 	webview.start(**webview_config)
 
