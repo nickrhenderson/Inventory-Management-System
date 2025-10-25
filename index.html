@@ -7,13 +7,94 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Inventory System</title>
-    <link rel="stylesheet" href="static/fouc-prevention.css">
+    <style>
+        /* Critical styles to prevent FOUC - must be inline and first */
+        /* Hide all body content by default until loaded */
+        body:not(.loaded) {
+            visibility: hidden !important;
+            overflow: hidden !important;
+        }
+        
+        /* Show only the loading screen initially */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f0f0f0;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+            visibility: visible !important;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #007acc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        .loading-text {
+            color: #666;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* When loaded, hide loading screen and show content */
+        body.loaded {
+            visibility: visible !important;
+            overflow: visible !important;
+        }
+        
+        body.loaded #loading-screen {
+            display: none !important;
+        }
+    </style>
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
     <script>
         // Check if we need to force a complete cache clear (after updates)
         const urlParams = new URLSearchParams(window.location.search);
         const forceCacheClear = urlParams.get('clear-cache') === 'true';
+        
+        // Track when the page started loading
+        const pageLoadStart = Date.now();
+        
+        // Global flag to track when initial loading screen is complete
+        window.loadingScreenComplete = false;
+        
+        // Function to trigger all pending animations
+        window.triggerPendingAnimations = function() {
+            console.log('Triggering pending animations...');
+            
+            // Trigger product animations if pending
+            if (window.pendingProductAnimation) {
+                window.pendingProductAnimation();
+                window.pendingProductAnimation = null;
+            }
+            
+            // Trigger ingredient animations if pending
+            if (window.pendingIngredientAnimation) {
+                window.pendingIngredientAnimation();
+                window.pendingIngredientAnimation = null;
+            }
+        };
         
         // Force complete resource refresh on load to prevent caching issues
         document.addEventListener('DOMContentLoaded', function() {
@@ -58,21 +139,66 @@
                 console.log('CSS cache refresh applied with timestamp:', timestamp);
             }
             
-            // Wait for styles to load, then show page to prevent FOUC
-            setTimeout(function() {
-                document.documentElement.classList.add('loaded');
-            }, forceCacheClear ? 200 : 100); // Longer delay for cache clearing
+            // Wait for styles.css to load, then show the app (with minimum 3 second delay)
+            const styleLink = document.querySelector('link[href*="styles.css"]');
+            if (styleLink) {
+                styleLink.addEventListener('load', function() {
+                    showAppAfterMinimumDelay();
+                });
+            } else {
+                // Fallback if link not found
+                setTimeout(function() {
+                    showAppAfterMinimumDelay();
+                }, 100);
+            }
         });
+        
+        // Function to show app after ensuring minimum 3 second loading time
+        function showAppAfterMinimumDelay() {
+            const elapsed = Date.now() - pageLoadStart;
+            const remaining = Math.max(0, 3000 - elapsed);
+            
+            setTimeout(function() {
+                // Add loaded class to body to trigger visibility and hide loading screen
+                document.body.classList.add('loaded');
+                window.loadingScreenComplete = true;
+                
+                // Trigger any pending animations that were waiting for the loading screen
+                if (window.triggerPendingAnimations) {
+                    window.triggerPendingAnimations();
+                }
+                
+                console.log('App ready after minimum loading time');
+            }, remaining);
+        }
         
         // Fallback in case DOMContentLoaded doesn't fire
         window.addEventListener('load', function() {
+            const elapsed = Date.now() - pageLoadStart;
+            const remaining = Math.max(0, 3000 - elapsed);
+            
             setTimeout(function() {
-                document.documentElement.classList.add('loaded');
-            }, forceCacheClear ? 100 : 50);
+                // Add loaded class to body to trigger visibility and hide loading screen
+                document.body.classList.add('loaded');
+                window.loadingScreenComplete = true;
+                
+                // Trigger any pending animations that were waiting for the loading screen
+                if (window.triggerPendingAnimations) {
+                    window.triggerPendingAnimations();
+                }
+            }, remaining);
         });
     </script>
 </head>
 <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading Inventory System...</div>
+        </div>
+    </div>
+    
     <!-- Top Navigation Bar -->
     <header class="top-bar">
         <button class="top-bar-button refresh-button" onclick="refreshFiles()" title="Refresh">
@@ -143,12 +269,6 @@
                     </button>
                 </div>
             </div>
-            
-            <!-- Other Settings sections can be added here -->
-            <div class="setting-section">
-                <h4>General</h4>
-                <p>Additional settings can be configured here.</p>
-            </div>
         </div>
     </aside>
     
@@ -158,13 +278,6 @@
         <section class="box left">
             <header class="box-title">
                 Products
-                <button class="box-add-button" onclick="openProductModal()" title="Add Product">
-                    <div class="plus-icon">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M6 12H18M12 6V18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                </button>
             </header>
             <div class="inventory-container">
                 <div id="inventoryTable"></div>
@@ -175,13 +288,6 @@
         <section class="box right">
             <header class="box-title" id="ingredientsBoxTitle">
                 <span id="ingredientsTitleText">All Ingredients</span>
-                <button class="box-add-button" id="ingredientsAddButton" onclick="openIngredientModal()" title="Add Ingredient">
-                    <div class="plus-icon">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M6 12H18M12 6V18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                </button>
             </header>
             <div class="ingredients-container">
                 <div id="rightBoxContent"></div>
@@ -189,6 +295,18 @@
             <footer class="ingredients-total-fixed" id="ingredientsTotalFixed"></footer>
         </section>
     </main>
+    
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="openProductModal(); hideContextMenu()">
+            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <span>Create Product</span>
+        </div>
+        <div class="context-menu-item" onclick="openIngredientModal(); hideContextMenu()">
+            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <span>Create Ingredient</span>
+        </div>
+    </div>
     
     <!-- Modals -->
     <!-- Product Creation Modal -->

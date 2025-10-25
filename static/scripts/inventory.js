@@ -4,16 +4,22 @@
  * Initialize the application
  */
 async function initializeApp() {
-    // Show initial loading state
-    showIngredientsLoading('Loading inventory system...');
+    // Clear search bar on startup to prevent unwanted filtering
+    const searchBar = document.querySelector('.search-bar');
+    if (searchBar) {
+        searchBar.value = '';
+    }
     
-    // Display all ingredients in the right panel
+    // Initialize context menu functionality
+    initializeContextMenu();
+    
+    // Display all ingredients in the right panel (silently loads in background)
     await displayAllIngredients();
     
     // Add click handler to left box for unselecting products
     addLeftBoxClickHandler();
     
-    // Load products data
+    // Load products data (silently loads in background)
     await loadProductsData();
 }
 

@@ -146,12 +146,12 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
 /**
  * Display all available ingredients in the inventory
  */
-async function displayAllIngredients() {
+async function displayAllIngredients(skipAnimation = false) {
     const rightContainer = document.getElementById('rightBoxContent');
     const totalContainer = document.getElementById('ingredientsTotalFixed');
     
     try {
-        rightContainer.innerHTML = createLoadingHTML('Loading all ingredients...');
+        // Don't show loading spinner - just prepare silently
         
         await waitForPywebview();
         const allIngredients = await pywebview.api.get_all_ingredients();
@@ -170,12 +170,33 @@ async function displayAllIngredients() {
         // Hide total section for all ingredients view
         totalContainer.style.display = 'none';
         
-        // Check if there's an active search and apply it
-        const searchBar = document.querySelector('.search-bar');
-        if (searchBar && searchBar.value.trim()) {
-            // Apply the current search filter to the newly loaded ingredients
-            if (typeof filterIngredientsIfApplicable === 'function') {
-                await filterIngredientsIfApplicable(searchBar.value.trim());
+        // Wait for loading screen to complete before showing ingredients
+        await waitForLoadingScreenThenShow(skipAnimation);
+        
+        // IMPORTANT: Check if there's an active search and apply it immediately
+        const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+        if (searchTerm) {
+            // Apply search filter to the newly loaded ingredients
+            const searchId = window.getCurrentSearchId ? window.getCurrentSearchId() : 0;
+            const filterData = await prepareIngredientFilterData(searchTerm);
+            if (filterData) {
+                // Apply filter without animations (ingredients just loaded)
+                const { matchingItems, nonMatchingItems } = filterData;
+                
+                // Hide non-matching items immediately
+                nonMatchingItems.forEach(item => {
+                    item.style.display = 'none';
+                });
+                
+                // Show matching items
+                matchingItems.forEach(item => {
+                    item.style.display = '';
+                });
+                
+                // Handle empty state
+                if (matchingItems.length === 0) {
+                    showNoIngredientsMessage(rightContainer.querySelector('.ingredients-list.all-ingredients'));
+                }
             }
         }
         
@@ -184,6 +205,54 @@ async function displayAllIngredients() {
         displayIngredientsError(rightContainer, totalContainer);
     }
 }
+
+/**
+ * Wait for loading screen to complete, then show ingredients
+ */
+async function waitForLoadingScreenThenShow(skipAnimation = false) {
+    // If loading screen is already complete, show immediately
+    if (window.loadingScreenComplete) {
+        animateIngredientsIn(skipAnimation);
+    } else {
+        // Store the animation function to be called when loading screen completes
+        window.pendingIngredientAnimation = () => animateIngredientsIn(skipAnimation);
+    }
+}
+
+/**
+ * Animate ingredients in with staggered timing (using same system as product rows)
+ */
+function animateIngredientsIn(skipAnimation = false) {
+    const ingredientItems = document.querySelectorAll('.ingredient-item.all-ingredient');
+    
+    ingredientItems.forEach((item, index) => {
+        if (skipAnimation) {
+            // Skip animation - just show immediately
+            item.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
+        } else {
+            setTimeout(() => {
+                animateIngredientItemIn(item);
+            }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
+        }
+    });
+}
+
+/**
+ * Animate ingredient item in (using same animation as product rows)
+ * @param {HTMLElement} item - Ingredient item element to animate
+ */
+function animateIngredientItemIn(item) {
+    item.getBoundingClientRect();
+    item.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
+    item.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+    
+    setTimeout(() => {
+        item.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+    }, INVENTORY_CONFIG.ANIMATION.ANIMATION_DURATION);
+}
+
+// Make function globally accessible
+window.displayAllIngredients = displayAllIngredients;
 
 /**
  * Display message when no ingredients are available
@@ -280,7 +349,7 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
     ];
     
     return `
-        <div class="ingredient-item all-ingredient${flaggedClass}" data-ingredient-id="${ingredient.id}">
+        <div class="ingredient-item all-ingredient${flaggedClass} ${INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
                 <div class="ingredient-menu-container">
                     <button class="ingredient-menu-button" 
@@ -399,16 +468,8 @@ async function toggleIngredientFlag(ingredientId, ingredientName, isCurrentlyFla
                 }
                 
                 if (result.success) {
-                    // Refresh the current ingredient display
-                    if (window.selectedProductId) {
-                        await loadProductIngredients(window.selectedProductId);
-                    } else {
-                        // If no product is selected, refresh the all ingredients view
-                        await displayAllIngredients();
-                    }
-                    
-                    // Update product table to reflect flagged status
-                    await updateProductTableFlaggedStatus();
+                    // Use unified refresh function to reload data with search persistence
+                    await refreshInventoryData();
                 } else {
                     throw new Error(result.message || ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
                 }
@@ -457,16 +518,8 @@ async function confirmDeleteIngredient(ingredientId, ingredientName) {
                 const result = await pywebview.api.delete_ingredient(ingredientId);
                 
                 if (result.success) {
-                    // Refresh the current ingredient display
-                    if (window.selectedProductId) {
-                        await loadProductIngredients(window.selectedProductId);
-                    } else {
-                        // If no product is selected, refresh the all ingredients view
-                        await displayAllIngredients();
-                    }
-                    
-                    // Update product table to reflect changes
-                    await loadProductsData();
+                    // Use unified refresh function to reload data with search persistence
+                    await refreshInventoryData();
                 } else {
                     throw new Error(result.message || 'Failed to delete ingredient');
                 }
@@ -497,6 +550,9 @@ function showIngredientsLoading(message = 'Loading...') {
     // Set appropriate title for loading state
     updateIngredientsTitle('Loading...', false);
 }
+
+// Make function globally accessible
+window.showIngredientsLoading = showIngredientsLoading;
 
 /**
  * Toggle the visibility of an ingredient's action menu

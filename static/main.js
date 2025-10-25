@@ -62,24 +62,9 @@ function refreshFiles() {
         }
     });
     
-    // Reset ingredients panel to initial state with loading
-    if (typeof showIngredientsLoading === 'function') {
-        showIngredientsLoading('Refreshing ingredients...');
-    }
-    
-    // Reset ingredients panel to initial state
-    if (typeof resetIngredientsPanel === 'function') {
-        resetIngredientsPanel();
-    }
-    
-    // Clear any selected product
-    if (typeof clearProductSelection === 'function') {
-        clearProductSelection();
-    }
-    
-    // Reload products data
-    if (typeof loadProductsData === 'function') {
-        loadProductsData();
+    // Use unified refresh function to reload data with search persistence
+    if (typeof refreshInventoryData === 'function') {
+        refreshInventoryData();
     }
     
     console.log('Files refreshed!');

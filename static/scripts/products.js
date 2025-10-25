@@ -30,23 +30,108 @@ async function loadProductsData() {
     const container = document.getElementById('inventoryTable');
     
     try {
-        container.innerHTML = createLoadingHTML('Loading products database...');
+        // Don't show loading spinner - just prepare the table silently
         
         await waitForPywebview();
-        await new Promise(resolve => setTimeout(resolve, INVENTORY_CONFIG.ANIMATION.LOADING_DELAY));
         
         const productsData = await pywebview.api.get_products_data();
         
-        container.querySelector('.loading-text').textContent = 'Rendering product entries...';
-        await new Promise(resolve => setTimeout(resolve, INVENTORY_CONFIG.ANIMATION.RENDER_DELAY));
+        // Store data globally
+        allProductsData = [...productsData];
+        window.allProductsData = allProductsData;
         
-        displayProductsTable(productsData);
+        // Create table structure
+        const tableHTML = createProductsTableHTML();
+        container.innerHTML = tableHTML;
+        
+        // Initialize search
+        initializeSearch();
+        initializeAmountChangeDetection();
+        
+        // Check if there's a search term and apply it, otherwise show all products
+        const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+        if (searchTerm) {
+            // Apply search filter if user has already typed something
+            const searchId = window.incrementSearchId ? window.incrementSearchId() : 0;
+            await performDynamicSearch(searchTerm, searchId);
+        } else {
+            // Show all products - but wait for loading screen to complete before animating
+            await animateProductsRowsWhenReady(allProductsData);
+        }
         
     } catch (error) {
         console.error(ERROR_MESSAGES.LOAD_PRODUCTS_FAILED, error);
         handleProductsLoadError(container, error);
     }
 }
+
+/**
+ * Unified refresh function - reloads both product and ingredient lists
+ * while preserving the current search term
+ */
+async function refreshInventoryData() {
+    console.log('Refreshing inventory data...');
+    
+    // Get current search term (DO NOT CLEAR IT)
+    const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+    console.log('Current search term:', searchTerm);
+    
+    // Store the currently selected product ID
+    const previouslySelectedProductId = window.selectedProductId;
+    
+    try {
+        // Load fresh product data from database (no loading spinner during refresh)
+        
+        await waitForPywebview();
+        const productsData = await pywebview.api.get_products_data();
+        
+        const container = document.getElementById('inventoryTable');
+        
+        // Store data globally but don't display yet
+        allProductsData = [...productsData];
+        window.allProductsData = allProductsData;
+        
+        // Create empty table structure
+        const tableHTML = createProductsTableHTML();
+        container.innerHTML = tableHTML;
+        
+        // Re-initialize search (without displaying products)
+        initializeSearch();
+        initializeAmountChangeDetection();
+        
+        // Check if we need to refresh ingredients panel
+        const titleTextElement = document.getElementById('ingredientsTitleText');
+        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
+        
+        if (isShowingAllIngredients) {
+            // Refresh the ingredients panel - it will respect the search term
+            await displayAllIngredients();
+        }
+        
+        // Apply search immediately to both products and ingredients (this will populate tables with filtered results)
+        const searchId = window.incrementSearchId ? window.incrementSearchId() : 0;
+        await performDynamicSearch(searchTerm, searchId);
+        
+        // Restore product selection if there was one
+        if (previouslySelectedProductId) {
+            // Check if the product still exists
+            const productStillExists = allProductsData.find(p => p.id === previouslySelectedProductId);
+            if (productStillExists) {
+                updateProductSelection(previouslySelectedProductId);
+            }
+        }
+        
+        console.log('Inventory data refreshed successfully');
+        
+    } catch (error) {
+        console.error('Error refreshing inventory data:', error);
+        const container = document.getElementById('inventoryTable');
+        handleProductsLoadError(container, error);
+    }
+}
+
+// Make function globally accessible
+window.refreshInventoryData = refreshInventoryData;
 
 /**
  * Display message when no products are available
@@ -150,6 +235,41 @@ async function animateProductsRows(data) {
             animateProductRowIn(row);
         }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
     }
+}
+
+/**
+ * Animate products rows but wait for loading screen to complete first
+ * @param {Array} data - Array of product data
+ */
+async function animateProductsRowsWhenReady(data) {
+    const tbody = document.getElementById('productsTableBody');
+    
+    // First, create all rows in hidden state
+    for (let index = 0; index < data.length; index++) {
+        const product = data[index];
+        const row = await createProductRow(product, index);
+        tbody.appendChild(row);
+    }
+    
+    // If loading screen is already complete, animate immediately
+    if (window.loadingScreenComplete) {
+        animateExistingProductRows();
+    } else {
+        // Store the animation function to be called when loading screen completes
+        window.pendingProductAnimation = animateExistingProductRows;
+    }
+}
+
+/**
+ * Animate existing product rows that are already in the DOM
+ */
+function animateExistingProductRows() {
+    const rows = document.querySelectorAll('#productsTableBody tr');
+    rows.forEach((row, index) => {
+        setTimeout(() => {
+            animateProductRowIn(row);
+        }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
+    });
 }
 
 /**
@@ -297,6 +417,9 @@ async function loadProductIngredients(productId) {
     }
 }
 
+// Make function globally accessible
+window.loadProductIngredients = loadProductIngredients;
+
 /**
  * Update product table to show flagged status
  */
@@ -351,19 +474,22 @@ async function resetIngredientsPanel() {
     const titleTextElement = document.getElementById('ingredientsTitleText');
     const isAlreadyShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
     
+    // Get current search term to apply after loading
+    const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+    
     // Only reload if not already showing "All Ingredients"
     if (!isAlreadyShowingAllIngredients) {
         // Show loading state first
         showIngredientsLoading('Loading all ingredients...');
         
-        // Display all ingredients instead of "Select a Product" message
-        await displayAllIngredients();
-        
-        // Check if there's an active search and apply it to ingredients
-        const searchBar = document.querySelector('.search-bar');
-        if (searchBar && searchBar.value.trim()) {
-            // Apply current search filter to the newly loaded ingredients
-            await filterIngredientsIfApplicable(searchBar.value.trim());
+        // Display all ingredients - it will automatically apply search if active
+        await displayAllIngredients(true);
+    } else if (searchTerm) {
+        // Already showing all ingredients, but ensure search filter is applied
+        const searchId = window.getCurrentSearchId ? window.getCurrentSearchId() : 0;
+        const filterData = await prepareIngredientFilterData(searchTerm);
+        if (filterData) {
+            await applyIngredientFilterResults(filterData, searchId);
         }
     }
 }
@@ -626,8 +752,8 @@ async function confirmDeleteProduct(productId, productName) {
                         await unselectCurrentProduct();
                     }
                     
-                    // Refresh the product table
-                    await loadProductsData();
+                    // Use unified refresh function to reload data with search persistence
+                    await refreshInventoryData();
                 } else {
                     throw new Error(result.message || 'Failed to delete product');
                 }

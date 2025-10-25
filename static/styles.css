@@ -143,20 +143,20 @@ body {
 .settings-panel {
     position: fixed;
     top: 0;
-    left: -80%;
+    right: -80%;
     width: 80%;
     height: 100vh;
     background: var(--bg-white);
-    box-shadow: 2px 0 10px var(--shadow-dark);
+    box-shadow: -2px 0 10px var(--shadow-dark);
     z-index: 1000;
-    transition: left 0.3s ease-in-out;
+    transition: right 0.3s ease-in-out;
     display: flex;
     flex-direction: column;
-    border-top-right-radius: 20px;
-    border-bottom-right-radius: 20px;
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
 }
 .settings-panel.open {
-    left: 0;
+    right: 0;
 }
 .close-button {
     position: absolute;
@@ -256,6 +256,12 @@ body {
 
 .search-bar:focus {
     box-shadow: 0 4px 12px var(--shadow-medium);
+    border: 2px solid var(--loading-accent);
+    padding: 7px 44px 7px 15px; /* Adjust padding to account for thicker border */
+}
+
+.search-bar:focus + .search-icon {
+    right: 11px; /* Adjust icon position for thicker border */
 }
 
 .search-container:has(.search-bar:focus) {
@@ -2255,21 +2261,52 @@ body {
     text-align: center;
 }
 
-/* Update status animations */
-.update-status.loading::before {
-    content: '';
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #007bff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 8px;
-    vertical-align: middle;
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 10002;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.8);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+    padding: 4px 0;
+    pointer-events: none;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.context-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.context-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.context-menu-item .menu-icon {
+    width: 16px;
+    height: 16px;
+    filter: opacity(0.7);
+    flex-shrink: 0;
+}
+
+.context-menu-item:hover .menu-icon {
+    filter: opacity(1);
 }

@@ -763,9 +763,14 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
     
-    // Refresh products table faster, then auto-close modal
+    // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
-        await loadProductsData();
+        // Clear search cache to ensure new items appear in searches
+        if (window.clearSearchCache) {
+            window.clearSearchCache();
+        }
+        
+        await refreshInventoryData();
         
         // Auto-close product modal after refresh
         setTimeout(() => {
@@ -820,9 +825,14 @@ function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
     
-    // Refresh products table faster, then auto-close modal
+    // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
-        await loadProductsData();
+        // Clear search cache to ensure updated items appear correctly in searches
+        if (window.clearSearchCache) {
+            window.clearSearchCache();
+        }
+        
+        await refreshInventoryData();
         
         // Auto-close product modal after refresh
         setTimeout(() => {
@@ -1120,13 +1130,29 @@ function handleIngredientCreationSuccess(submitButton, result) {
     // Display success message with barcode
     displayIngredientSuccess(result.ingredient, result.barcode_id);
     
-    // Refresh the current ingredient display but DON'T auto-close the modal
+    // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
-        if (window.selectedProductId) {
-            await loadProductIngredients(window.selectedProductId);
-        } else {
-            // If no product is selected, refresh the all ingredients view
+        // Clear search cache to ensure new ingredients appear in searches
+        if (window.clearSearchCache) {
+            window.clearSearchCache();
+        }
+        
+        // Check if we're showing "All Ingredients" and reload them specifically
+        const titleTextElement = document.getElementById('ingredientsTitleText');
+        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
+        
+        if (isShowingAllIngredients) {
+            // Reload ingredients panel to include the new ingredient
             await displayAllIngredients();
+            
+            // Re-apply current search filter if any
+            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+            if (searchTerm && window.filterIngredientsIfApplicable) {
+                await window.filterIngredientsIfApplicable(searchTerm, 0);
+            }
+        } else {
+            // Use standard refresh for other cases
+            await refreshInventoryData();
         }
         // Note: No auto-close for ingredient modal - user must manually close
     }, 300);
@@ -1177,13 +1203,29 @@ function handleIngredientUpdateSuccess(submitButton, result) {
         container.style.display = 'block';
     }
     
-    // Refresh the current ingredient display but DON'T auto-close the modal
+    // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
-        if (window.selectedProductId) {
-            await loadProductIngredients(window.selectedProductId);
-        } else {
-            // If no product is selected, refresh the all ingredients view
+        // Clear search cache to ensure updated ingredients appear correctly in searches
+        if (window.clearSearchCache) {
+            window.clearSearchCache();
+        }
+        
+        // Check if we're showing "All Ingredients" and reload them specifically
+        const titleTextElement = document.getElementById('ingredientsTitleText');
+        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
+        
+        if (isShowingAllIngredients) {
+            // Reload ingredients panel to reflect the updated ingredient
             await displayAllIngredients();
+            
+            // Re-apply current search filter if any
+            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+            if (searchTerm && window.filterIngredientsIfApplicable) {
+                await window.filterIngredientsIfApplicable(searchTerm, 0);
+            }
+        } else {
+            // Use standard refresh for other cases
+            await refreshInventoryData();
         }
         // Note: No auto-close for ingredient modal - user must manually close
     }, 300);

@@ -11,7 +11,7 @@ import subprocess
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -416,9 +416,9 @@ def main():
 	webview.create_window(
 		"Bad-Bandit IMS",
 		url=html_url,
-		width=1000,
+		width=1200,
 		height=720,
-		min_size=(1000, 125),
+		min_size=(1200, 125),
 		resizable=True,
 		js_api=api
 	)

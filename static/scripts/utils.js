@@ -330,3 +330,147 @@ async function printBarcode(barcodeId) {
         // Silent error handling - no visual feedback to the barcode display
     }
 }
+
+// Context menu functionality
+let contextMenuVisible = false;
+let contextMenuPosition = { x: 0, y: 0 };
+
+/**
+ * Show the context menu at the specified position
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ */
+function showContextMenu(x, y) {
+    const contextMenu = document.getElementById('contextMenu');
+    if (!contextMenu) {
+        console.error('Context menu element not found!');
+        return;
+    }
+    
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Get menu dimensions (approximate)
+    const menuWidth = 180;
+    const menuHeight = 80; // Approximate height for 2 items
+    
+    // Adjust position to keep menu on screen
+    let adjustedX = x;
+    let adjustedY = y;
+    
+    if (x + menuWidth > viewportWidth) {
+        adjustedX = x - menuWidth;
+    }
+    
+    if (y + menuHeight > viewportHeight) {
+        adjustedY = y - menuHeight;
+    }
+    
+    // Ensure menu doesn't go off the left or top edges
+    adjustedX = Math.max(0, adjustedX);
+    adjustedY = Math.max(0, adjustedY);
+    
+    // Position the menu
+    contextMenu.style.left = adjustedX + 'px';
+    contextMenu.style.top = adjustedY + 'px';
+    
+    // Store the menu position for distance calculation
+    contextMenuPosition = { x: adjustedX, y: adjustedY };
+    
+    // Show the menu
+    contextMenu.classList.add('show');
+    contextMenuVisible = true;
+    
+    console.log('Context menu shown at:', adjustedX, adjustedY);
+}
+
+/**
+ * Hide the context menu
+ */
+function hideContextMenu() {
+    const contextMenu = document.getElementById('contextMenu');
+    if (!contextMenu) return;
+    
+    // Remove the show class to trigger the scale-down animation
+    contextMenu.classList.remove('show');
+    contextMenuVisible = false;
+}
+
+/**
+ * Handle right-click events on the main content area
+ * @param {MouseEvent} event - The right-click event
+ */
+function handleContextMenu(event) {
+    console.log('Context menu event triggered', event.target, event.clientX, event.clientY);
+    
+    // Don't show context menu if clicking on interactive elements
+    if (event.target.closest('.ingredient-menu, .context-menu, button, input, select, textarea, .modal-content, .settings-panel')) {
+        console.log('Context menu blocked - on interactive element');
+        return;
+    }
+    
+    // Prevent default context menu
+    event.preventDefault();
+    console.log('Default prevented, showing context menu');
+    
+    // Show context menu at mouse position
+    showContextMenu(event.clientX, event.clientY);
+}
+
+/**
+ * Initialize context menu functionality
+ */
+function initializeContextMenu() {
+    const mainElement = document.querySelector('main');
+    if (mainElement) {
+        // Add right-click event listener to the main element
+        mainElement.addEventListener('contextmenu', handleContextMenu);
+        console.log('Context menu listener attached to main element');
+    } else {
+        console.error('Main element not found for context menu');
+    }
+    
+    // Add click event listener to hide context menu when clicking elsewhere
+    document.addEventListener('click', function(event) {
+        if (contextMenuVisible && !event.target.closest('.context-menu')) {
+            hideContextMenu();
+        }
+    });
+    
+    // Add escape key listener to hide context menu
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && contextMenuVisible) {
+            hideContextMenu();
+        }
+    });
+    
+    // Add mousemove listener to hide context menu when mouse moves far away
+    document.addEventListener('mousemove', function(event) {
+        if (!contextMenuVisible) return;
+        
+        const contextMenu = document.getElementById('contextMenu');
+        if (!contextMenu) return;
+        
+        // Get the menu dimensions
+        const menuRect = contextMenu.getBoundingClientRect();
+        
+        // Calculate distance from mouse to the menu (including some padding)
+        const padding = 20; // pixels of padding around the menu
+        const mouseX = event.clientX;
+        const mouseY = event.clientY;
+        
+        // Check if mouse is within the expanded menu bounds
+        const isNearMenu = (
+            mouseX >= menuRect.left - padding &&
+            mouseX <= menuRect.right + padding &&
+            mouseY >= menuRect.top - padding &&
+            mouseY <= menuRect.bottom + padding
+        );
+        
+        // Hide menu if mouse is far away
+        if (!isNearMenu) {
+            hideContextMenu();
+        }
+    });
+}
