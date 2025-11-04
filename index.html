@@ -69,10 +69,6 @@
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
     <script>
-        // Check if we need to force a complete cache clear (after updates)
-        const urlParams = new URLSearchParams(window.location.search);
-        const forceCacheClear = urlParams.get('clear-cache') === 'true';
-        
         // Track when the page started loading
         const pageLoadStart = Date.now();
         
@@ -96,50 +92,8 @@
             }
         };
         
-        // Force complete resource refresh on load to prevent caching issues
+        // Wait for styles.css to load, then show the app (with minimum 3 second delay)
         document.addEventListener('DOMContentLoaded', function() {
-            const timestamp = Date.now();
-            
-            // Force reload all CSS files
-            const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
-            stylesheets.forEach(function(link) {
-                const href = link.href;
-                const baseHref = href.split('?')[0];
-                // Use different cache busting strategy for updates vs normal loads
-                if (forceCacheClear) {
-                    link.href = baseHref + '?force-reload=' + timestamp;
-                } else {
-                    link.href = baseHref + '?v=0.3.0&t=' + timestamp;
-                }
-            });
-            
-            // Force reload all JavaScript files if cache clearing
-            if (forceCacheClear) {
-                const scripts = document.querySelectorAll('script[src]');
-                scripts.forEach(function(script) {
-                    if (script.src && !script.src.includes('data:')) {
-                        const src = script.src;
-                        const baseSrc = src.split('?')[0];
-                        const newScript = document.createElement('script');
-                        
-                        // Copy attributes
-                        if (script.defer) newScript.defer = true;
-                        if (script.async) newScript.async = true;
-                        
-                        newScript.src = baseSrc + '?force-reload=' + timestamp;
-                        
-                        // Replace old script
-                        script.parentNode.insertBefore(newScript, script);
-                        script.parentNode.removeChild(script);
-                    }
-                });
-                
-                console.log('Complete cache clear applied - all resources reloaded with timestamp:', timestamp);
-            } else {
-                console.log('CSS cache refresh applied with timestamp:', timestamp);
-            }
-            
-            // Wait for styles.css to load, then show the app (with minimum 3 second delay)
             const styleLink = document.querySelector('link[href*="styles.css"]');
             if (styleLink) {
                 styleLink.addEventListener('load', function() {
@@ -201,84 +155,21 @@
     
     <!-- Top Navigation Bar -->
     <header class="top-bar">
-        <button class="top-bar-button refresh-button" onclick="refreshFiles()" title="Refresh">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M21 3V8M21 8H16M21 8L18 5.29168C16.4077 3.86656 14.3051 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21C16.2832 21 19.8675 18.008 20.777 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        </button>
         <div class="search-container">
             <input class="search-bar" type="text" placeholder="Search..." autocomplete="off">
             <div class="search-icon">
                 <img src="static/img/svg/magnifyglass.svg" alt="Search" />
             </div>
         </div>
-        <button class="top-bar-button settings-button" onclick="toggleSettings()" title="Settings">
-            <svg width="20" height="20" viewBox="-1 0 19 19" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16.014 8.86v1.44a.587.587 0 0 1-.468.556l-1.182.204a.463.463 0 0 1-.114.006 5.902 5.902 0 0 1-.634 1.528.455.455 0 0 1 .078.084l.691.98a.586.586 0 0 1-.062.725l-1.02 1.02a.586.586 0 0 1-.724.061l-.98-.69a.444.444 0 0 1-.085-.078 5.908 5.908 0 0 1-1.544.637.502.502 0 0 1 0 .175l-.182 1.053a.667.667 0 0 1-.633.532h-1.31a.667.667 0 0 1-.633-.532l-.182-1.053a.495.495 0 0 1 0-.175 5.908 5.908 0 0 1-1.544-.637.444.444 0 0 1-.085.077l-.98.691a.586.586 0 0 1-.725-.062l-1.02-1.02a.586.586 0 0 1-.061-.723l.691-.98a.454.454 0 0 1 .077-.085 5.901 5.901 0 0 1-.633-1.528.466.466 0 0 1-.114-.006l-1.182-.204a.586.586 0 0 1-.468-.556V8.86a.586.586 0 0 1 .468-.556L2.636 8.1a.437.437 0 0 1 .114-.005 5.912 5.912 0 0 1 .633-1.528.466.466 0 0 1-.077-.085l-.691-.98a.587.587 0 0 1 .061-.724l1.02-1.02a.587.587 0 0 1 .725-.062l.98.691a.444.444 0 0 1 .085.078 5.903 5.903 0 0 1 1.528-.634.433.433 0 0 1 .005-.114l.204-1.182a.586.586 0 0 1 .556-.468h1.442a.586.586 0 0 1 .556.468l.204 1.182a.448.448 0 0 1 .005.114 5.908 5.908 0 0 1 1.528.634.444.444 0 0 1 .085-.078l.98-.691a.586.586 0 0 1 .724.062l1.02 1.02a.586.586 0 0 1 .062.724l-.691.98a.467.467 0 0 1-.078.085 5.902 5.902 0 0 1 .634 1.528.434.434 0 0 1 .114.005l1.182.204a.587.587 0 0 1 .468.556zm-4.955.72a2.559 2.559 0 1 0-2.56 2.56 2.559 2.559 0 0 0 2.56-2.56z"/>
-            </svg>
+        <button class="top-bar-button version-button" title="Version" id="versionButton">
+            v0.3.3
         </button>
     </header>
-    
-    <!-- Settings Panel -->
-    <div class="modal-backdrop settings-backdrop" id="settingsBackdrop" onclick="toggleSettings()"></div>
-    <aside class="settings-panel" id="settingsPanel">
-        <button class="close-button" onclick="toggleSettings()" title="Close">×</button>
-        <div class="settings-content">
-            <h3>Settings</h3>
-            
-            <!-- Update Section -->
-            <div class="setting-section">
-                <h4>Application Updates</h4>
-                <div class="setting-item">
-                    <div class="version-info">
-                        <span>Current Version: <span id="currentVersion">Loading...</span></span>
-                        <small style="display: block; color: #666; margin-top: 4px;">
-                            Cache Version: <span id="cacheVersion">0.2.0</span>
-                        </small>
-                    </div>
-                    <div class="update-controls">
-                        <button id="checkUpdateBtn" class="btn btn-primary" onclick="checkForUpdates()">
-                            Check for Updates
-                        </button>
-                        <div id="updateStatus" class="update-status"></div>
-                        <div id="updateActions" class="update-actions" style="display: none;">
-                            <button id="downloadUpdateBtn" class="btn btn-success" onclick="downloadUpdate()">
-                                Download Update
-                            </button>
-                            <button id="viewReleaseBtn" class="btn btn-secondary" onclick="viewRelease()">
-                                View Release Notes
-                            </button>
-                        </div>
-                        <div id="downloadProgress" class="download-progress" style="display: none;">
-                            <div class="progress-bar">
-                                <div id="progressFill" class="progress-fill"></div>
-                            </div>
-                            <span id="progressText">Downloading...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Cache Management Section -->
-            <div class="setting-section">
-                <h4>Cache Management</h4>
-                <div class="setting-item">
-                    <p>If styling appears outdated after updates, you can force refresh the application cache.</p>
-                    <button id="refreshCacheBtn" class="btn btn-secondary" onclick="refreshApplicationCache()">
-                        Refresh Cache
-                    </button>
-                </div>
-            </div>
-        </div>
-    </aside>
     
     <!-- Main Application Content -->
     <main class="main">
         <!-- Products Panel -->
         <section class="box left">
-            <header class="box-title">
-                Products
-            </header>
             <div class="inventory-container">
                 <div id="inventoryTable"></div>
             </div>
@@ -286,9 +177,6 @@
         
         <!-- Ingredients Panel -->
         <section class="box right">
-            <header class="box-title" id="ingredientsBoxTitle">
-                <span id="ingredientsTitleText">All Ingredients</span>
-            </header>
             <div class="ingredients-container">
                 <div id="rightBoxContent"></div>
             </div>
@@ -300,11 +188,22 @@
     <div class="context-menu" id="contextMenu">
         <div class="context-menu-item" onclick="openProductModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
-            <span>Create Product</span>
+            <span>Add Product</span>
         </div>
         <div class="context-menu-item" onclick="openIngredientModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
-            <span>Create Ingredient</span>
+            <span>Add Ingredient</span>
+        </div>
+        <div class="context-menu-item" onclick="openGroupModal(); hideContextMenu()">
+            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <span>Create Group</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="refreshFiles(); hideContextMenu()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="menu-icon">
+                <path d="M21 3V8M21 8H16M21 8L18 5.29168C16.4077 3.86656 14.3051 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21C16.2832 21 19.8675 18.008 20.777 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Refresh</span>
         </div>
     </div>
     
@@ -326,6 +225,12 @@
                 <div class="form-group">
                     <label for="productAmount">Number of Batches Produced:</label>
                     <input type="number" id="productAmount" name="productAmount" min="0" step="1" value="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="productGroup">Assign to Group:</label>
+                    <select id="productGroup" name="productGroup">
+                        <option value="">None</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="barcodeScanner">Scan Ingredient Barcode:</label>
@@ -380,5 +285,24 @@
             <div class="barcode-result" id="ingredientBarcodeResult" style="display: none;"></div>
         </div>
     </div>
+    
+    <!-- Group Creation Modal -->
+    <div class="modal-backdrop creation-modal-backdrop" id="groupModalBackdrop" onclick="closeGroupModal()">
+        <div class="modal-content creation-modal" id="groupModal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeGroupModal()" title="Close">×</button>
+            <h3>Create New Group</h3>
+            <form id="groupForm">
+                <div class="form-group">
+                    <label for="groupName">Group Name:</label>
+                    <input type="text" id="groupName" name="groupName" required autocomplete="off" placeholder="Enter group name...">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="modal-button cancel" onclick="closeGroupModal()">Cancel</button>
+                    <button type="submit" class="modal-button submit" id="submitGroupButton">Create Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
+

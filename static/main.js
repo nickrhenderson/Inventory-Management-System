@@ -2,11 +2,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const scripts = [
         { src: "static/scripts/constants.js", isModule: false },
         { src: "static/scripts/utils.js", isModule: false },
+        { src: "static/scripts/groups.js", isModule: false },
         { src: "static/scripts/search.js", isModule: false },
         { src: "static/scripts/ingredients.js", isModule: false },
         { src: "static/scripts/products.js", isModule: false },
         { src: "static/scripts/modals.js", isModule: false },
-        { src: "static/scripts/settings.js", isModule: false },
         { src: "static/scripts/inventory.js", isModule: false }
     ];
 

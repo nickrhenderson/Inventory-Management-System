@@ -145,8 +145,11 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
 
 /**
  * Display all available ingredients in the inventory
+ * @param {boolean} skipAnimation - Whether to skip the fade-in animation
+ * @param {boolean} applySearchFilter - Whether to apply search filter immediately (default true, set to false during refresh)
+ * @param {string} preFilterSearchTerm - Search term to pre-filter items before animation (prevents flash)
  */
-async function displayAllIngredients(skipAnimation = false) {
+async function displayAllIngredients(skipAnimation = false, applySearchFilter = true, preFilterSearchTerm = null) {
     const rightContainer = document.getElementById('rightBoxContent');
     const totalContainer = document.getElementById('ingredientsTotalFixed');
     
@@ -170,27 +173,16 @@ async function displayAllIngredients(skipAnimation = false) {
         // Hide total section for all ingredients view
         totalContainer.style.display = 'none';
         
-        // Wait for loading screen to complete before showing ingredients
-        await waitForLoadingScreenThenShow(skipAnimation);
-        
-        // IMPORTANT: Check if there's an active search and apply it immediately
-        const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
-        if (searchTerm) {
-            // Apply search filter to the newly loaded ingredients
-            const searchId = window.getCurrentSearchId ? window.getCurrentSearchId() : 0;
-            const filterData = await prepareIngredientFilterData(searchTerm);
+        // IMPORTANT: Pre-filter items BEFORE animation if search term is provided
+        // This prevents flashing all ingredients before filtering
+        if (preFilterSearchTerm) {
+            const filterData = await prepareIngredientFilterData(preFilterSearchTerm);
             if (filterData) {
-                // Apply filter without animations (ingredients just loaded)
+                // Hide non-matching items immediately (before animation)
                 const { matchingItems, nonMatchingItems } = filterData;
                 
-                // Hide non-matching items immediately
                 nonMatchingItems.forEach(item => {
                     item.style.display = 'none';
-                });
-                
-                // Show matching items
-                matchingItems.forEach(item => {
-                    item.style.display = '';
                 });
                 
                 // Handle empty state
@@ -199,6 +191,32 @@ async function displayAllIngredients(skipAnimation = false) {
                 }
             }
         }
+        // IMPORTANT: Apply search filter BEFORE animation if needed (for legacy calls)
+        // This prevents flashing all ingredients before filtering
+        else if (applySearchFilter) {
+            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+            if (searchTerm) {
+                // Apply search filter to the newly loaded ingredients BEFORE animating
+                const searchId = window.getCurrentSearchId ? window.getCurrentSearchId() : 0;
+                const filterData = await prepareIngredientFilterData(searchTerm);
+                if (filterData) {
+                    // Hide non-matching items immediately (before animation)
+                    const { matchingItems, nonMatchingItems } = filterData;
+                    
+                    nonMatchingItems.forEach(item => {
+                        item.style.display = 'none';
+                    });
+                    
+                    // Handle empty state
+                    if (matchingItems.length === 0) {
+                        showNoIngredientsMessage(rightContainer.querySelector('.ingredients-list.all-ingredients'));
+                    }
+                }
+            }
+        }
+        
+        // Wait for loading screen to complete before showing ingredients
+        await waitForLoadingScreenThenShow(skipAnimation);
         
     } catch (error) {
         console.error(ERROR_MESSAGES.LOAD_INGREDIENTS_FAILED, error);
@@ -260,7 +278,12 @@ window.displayAllIngredients = displayAllIngredients;
  * @param {HTMLElement} totalContainer - Total container element
  */
 function displayNoIngredientsMessage(rightContainer, totalContainer) {
-    rightContainer.innerHTML = '';
+    rightContainer.innerHTML = `
+        <div class="empty-state-message">
+            <h3>Add Ingredient</h3>
+            <p>Right click and select "Create Ingredient"</p>
+        </div>
+    `;
     totalContainer.style.display = 'none';
     updateIngredientsTitle('All Ingredients', true);
 }
@@ -409,13 +432,15 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
  * @param {boolean} showAddButton - Whether to show the add button
  */
 function updateIngredientsTitle(titleText = 'Ingredients', showAddButton = true) {
-    const titleTextElement = document.getElementById('ingredientsTitleText');
-    const addButton = document.getElementById('ingredientsAddButton');
-    
-    if (titleTextElement) {
-        titleTextElement.textContent = titleText;
+    // Update global state variable
+    if (titleText === 'All Ingredients') {
+        window.currentIngredientsView = 'all';
+    } else if (titleText === 'Product Ingredients') {
+        window.currentIngredientsView = 'product';
     }
     
+    // Handle add button visibility (if it exists)
+    const addButton = document.getElementById('ingredientsAddButton');
     if (addButton) {
         addButton.style.display = showAddButton ? 'flex' : 'none';
     }

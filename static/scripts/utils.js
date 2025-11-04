@@ -397,6 +397,9 @@ function hideContextMenu() {
     contextMenuVisible = false;
 }
 
+// Make hideContextMenu globally accessible
+window.hideContextMenu = hideContextMenu;
+
 /**
  * Handle right-click events on the main content area
  * @param {MouseEvent} event - The right-click event
@@ -405,9 +408,27 @@ function handleContextMenu(event) {
     console.log('Context menu event triggered', event.target, event.clientX, event.clientY);
     
     // Don't show context menu if clicking on interactive elements
-    if (event.target.closest('.ingredient-menu, .context-menu, button, input, select, textarea, .modal-content, .settings-panel')) {
+    if (event.target.closest('.ingredient-menu, .context-menu, button, input, select, textarea, .modal-content')) {
         console.log('Context menu blocked - on interactive element');
         return;
+    }
+    
+    // Check if right-clicking on a product row
+    const productRow = event.target.closest('tr[data-product-id]');
+    if (productRow) {
+        window.contextMenuProductId = parseInt(productRow.dataset.productId);
+        // Show "Add to Group" menu item if groups exist
+        const addToGroupItem = document.getElementById('addToGroupMenuItem');
+        if (addToGroupItem && window.productGroups && window.productGroups.length > 0) {
+            addToGroupItem.style.display = '';
+        }
+    } else {
+        window.contextMenuProductId = null;
+        // Hide "Add to Group" menu item
+        const addToGroupItem = document.getElementById('addToGroupMenuItem');
+        if (addToGroupItem) {
+            addToGroupItem.style.display = 'none';
+        }
     }
     
     // Prevent default context menu
@@ -474,3 +495,21 @@ function initializeContextMenu() {
         }
     });
 }
+
+/**
+ * Show group selection menu from context menu
+ * @param {Event} event - Click event
+ */
+function showGroupMenuFromContext(event) {
+    if (window.contextMenuProductId && window.showGroupSelectionMenu) {
+        // Get the position of the context menu
+        const contextMenu = document.getElementById('contextMenu');
+        if (contextMenu) {
+            const rect = contextMenu.getBoundingClientRect();
+            window.showGroupSelectionMenu(window.contextMenuProductId, rect.right + 5, rect.top);
+        }
+    }
+}
+
+// Make function globally accessible
+window.showGroupMenuFromContext = showGroupMenuFromContext;

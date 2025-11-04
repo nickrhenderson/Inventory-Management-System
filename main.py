@@ -1,17 +1,15 @@
-
 import webview
 import os
 import sys
-import time
-import webbrowser
 import requests
 import json
-import shutil
+import tempfile
 import subprocess
+import shutil
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.4.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -124,6 +122,40 @@ class InventoryAPI:
 		"""Legacy method - now returns products data for compatibility"""
 		return self.db_manager.get_products_data()
 	
+	# Group management methods
+	
+	def get_all_groups(self):
+		"""Get all groups with their product IDs"""
+		return self.db_manager.get_all_groups()
+	
+	def create_group(self, group_name):
+		"""Create a new group"""
+		return self.db_manager.create_group(group_name)
+	
+	def delete_group(self, group_id):
+		"""Delete a group (products remain, just removed from group)"""
+		return self.db_manager.delete_group(group_id)
+	
+	def update_group_order(self, group_id, new_order):
+		"""Update the display order of a group"""
+		return self.db_manager.update_group_order(group_id, new_order)
+	
+	def update_group_collapsed_state(self, group_id, is_collapsed):
+		"""Update whether a group is collapsed or expanded"""
+		return self.db_manager.update_group_collapsed_state(group_id, is_collapsed)
+	
+	def add_product_to_group(self, group_id, product_id):
+		"""Add a product to a group"""
+		return self.db_manager.add_product_to_group(group_id, product_id)
+	
+	def remove_product_from_group(self, product_id):
+		"""Remove a product from its group"""
+		return self.db_manager.remove_product_from_group(product_id)
+	
+	def get_product_group(self, product_id):
+		"""Get the group that a product belongs to (if any)"""
+		return self.db_manager.get_product_group(product_id)
+	
 	def generate_barcode_pdf(self, barcode_id):
 		"""Generate a PDF file with a printable barcode optimized for 1.5" x 1" labels (PLS198)"""
 		return self.db_manager.generate_barcode_pdf(barcode_id)
@@ -131,15 +163,6 @@ class InventoryAPI:
 	def get_app_version(self):
 		"""Get the current application version"""
 		return self._success_response("Version retrieved", version=APP_VERSION)
-	
-	def force_css_refresh(self):
-		"""Force CSS refresh by injecting JavaScript to reload stylesheets"""
-		try:
-			# This will be called from JavaScript to force CSS refresh
-			timestamp = str(int(time.time()))
-			return self._success_response("CSS refresh initiated", timestamp=timestamp)
-		except Exception as e:
-			return self._error_response(f"Failed to refresh CSS: {str(e)}")
 	
 	def check_for_updates(self):
 		"""Check for updates on GitHub releases"""
@@ -166,21 +189,6 @@ class InventoryAPI:
 				release_data = response.json()
 			
 			latest_version = release_data.get('tag_name', '').lstrip('v')
-			release_url = release_data.get('html_url', '')
-			release_notes = release_data.get('body', '')
-			published_at = release_data.get('published_at', '')
-			is_prerelease = release_data.get('prerelease', False)
-			
-			# Find the .exe asset
-			exe_asset = None
-			for asset in release_data.get('assets', []):
-				if asset.get('name', '').endswith('.exe'):
-					exe_asset = {
-						'name': asset.get('name'),
-						'download_url': asset.get('browser_download_url'),
-						'size': asset.get('size', 0)
-					}
-					break
 			
 			# Compare versions
 			update_available = self._is_newer_version(latest_version, APP_VERSION)
@@ -189,12 +197,7 @@ class InventoryAPI:
 				"Update check completed",
 				current_version=APP_VERSION,
 				latest_version=latest_version,
-				update_available=update_available,
-				release_url=release_url,
-				release_notes=release_notes,
-				published_at=published_at,
-				is_prerelease=is_prerelease,
-				exe_asset=exe_asset
+				update_available=update_available
 			)
 			
 		except requests.RequestException as e:
@@ -228,148 +231,84 @@ class InventoryAPI:
 			# If version parsing fails, assume update is available to be safe
 			return True
 	
-	def download_update(self, download_url):
-		"""Download the update file"""
+	def download_and_install_update(self):
+		"""Download and install the latest version from GitHub releases"""
 		try:
-			if not download_url:
-				return self._error_response("No download URL provided")
+			# Get latest release information
+			url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+			response = requests.get(url, timeout=10)
 			
-			# Create downloads directory
-			downloads_dir = os.path.join(get_data_path(), "downloads")
-			os.makedirs(downloads_dir, exist_ok=True)
+			if response.status_code == 404:
+				url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+				response = requests.get(url, timeout=10)
+				response.raise_for_status()
+				releases = response.json()
+				if not releases:
+					return self._error_response("No releases found in repository")
+				release_data = releases[0]
+			else:
+				response.raise_for_status()
+				release_data = response.json()
 			
-			# Get filename from URL
-			filename = download_url.split('/')[-1]
-			if not filename.endswith('.exe'):
-				filename = "InventorySystem_Update.exe"
+			# Find the exe asset
+			assets = release_data.get('assets', [])
+			exe_asset = None
+			for asset in assets:
+				if asset['name'].endswith('.exe'):
+					exe_asset = asset
+					break
 			
-			file_path = os.path.join(downloads_dir, filename)
+			if not exe_asset:
+				return self._error_response("No executable file found in the latest release")
 			
-			# Download the file
-			response = requests.get(download_url, stream=True, timeout=30)
-			response.raise_for_status()
+			# Get current executable path
+			current_exe = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+			current_dir = os.path.dirname(current_exe)
+			current_filename = os.path.basename(current_exe)
 			
-			total_size = int(response.headers.get('content-length', 0))
-			downloaded = 0
+			# Download the new exe to a temporary location
+			download_url = exe_asset['browser_download_url']
+			temp_dir = tempfile.mkdtemp()
+			temp_exe_path = os.path.join(temp_dir, f"new_{current_filename}")
 			
-			with open(file_path, 'wb') as f:
-				for chunk in response.iter_content(chunk_size=8192):
-					if chunk:
-						f.write(chunk)
-						downloaded += len(chunk)
+			# Download with progress indication
+			with requests.get(download_url, stream=True, timeout=30) as r:
+				r.raise_for_status()
+				total_size = int(r.headers.get('content-length', 0))
+				
+				with open(temp_exe_path, 'wb') as f:
+					downloaded = 0
+					for chunk in r.iter_content(chunk_size=8192):
+						if chunk:
+							f.write(chunk)
+							downloaded += len(chunk)
 			
-			return self._success_response(
-				"Update downloaded successfully",
-				file_path=file_path,
-				file_size=downloaded,
-				filename=filename
-			)
+			# Verify the download
+			if not os.path.exists(temp_exe_path) or os.path.getsize(temp_exe_path) == 0:
+				os.remove(temp_exe_path)
+				shutil.rmtree(temp_dir)
+				return self._error_response("Download failed - file is empty or corrupted")
+			
+			# Create a batch file to handle the update process
+			batch_content = f'''@echo off
+timeout /t 2 /nobreak > nul
+move /y "{temp_exe_path}" "{current_exe}"
+start "" "{current_exe}"
+del "%~f0"
+'''
+			batch_path = os.path.join(temp_dir, 'update.bat')
+			with open(batch_path, 'w') as f:
+				f.write(batch_content)
+			
+			# Execute the batch file and exit
+			subprocess.Popen([batch_path], shell=True, creationflags=subprocess.DETACHED_PROCESS)
+			
+			return self._success_response("Update downloaded successfully. Application will restart.")
 			
 		except requests.RequestException as e:
 			return self._error_response(f"Failed to download update: Network error - {str(e)}")
 		except Exception as e:
-			return self._error_response(f"Failed to download update: {str(e)}")
-	
-	def install_update(self, file_path):
-		"""Install the downloaded update"""
-		try:
-			if not os.path.exists(file_path):
-				return self._error_response("Update file not found")
-			
-			# Get current executable path
-			if getattr(sys, 'frozen', False):
-				current_exe = sys.executable
-			else:
-				return self._error_response("Cannot update - not running as executable")
-			
-			# Create batch script for updating
-			batch_script = os.path.join(get_data_path(), "update.bat")
-			
-			with open(batch_script, 'w') as f:
-				f.write(f'''@echo off
-echo Installing update...
-timeout /t 2 /nobreak > nul
-taskkill /f /im "{os.path.basename(current_exe)}" > nul 2>&1
-timeout /t 2 /nobreak > nul
-copy /y "{file_path}" "{current_exe}"
-if %errorlevel% equ 0 (
-    echo Update installed successfully!
-    del "{file_path}" > nul 2>&1
-    echo Clearing application cache...
-    timeout /t 1 /nobreak > nul
-    echo Restarting application with fresh cache...
-    start "" "{current_exe}" --clear-cache --force-reload
-    del "{batch_script}" > nul 2>&1
-) else (
-    echo Update failed!
-    echo Press any key to continue...
-    pause > nul
-)
-''')
-			
-			# Start the update process and immediately initiate shutdown
-			subprocess.Popen(['cmd', '/c', batch_script], creationflags=subprocess.CREATE_NO_WINDOW)
-			
-			# Schedule application exit after a brief delay to allow the response to be sent
-			import threading
-			def delayed_exit():
-				time.sleep(1)  # Give time for the response to be sent
-				os._exit(0)  # Force exit without cleanup (batch script will restart)
-			
-			threading.Thread(target=delayed_exit, daemon=True).start()
-			
-			return self._success_response(
-				"Update installed - application restarting with fresh cache",
-				restart_required=True
-			)
-			
-		except Exception as e:
 			return self._error_response(f"Failed to install update: {str(e)}")
-	
-	def open_release_page(self, release_url):
-		"""Open the GitHub release page in the browser"""
-		try:
-			webbrowser.open(release_url)
-			return self._success_response("Release page opened in browser")
-		except Exception as e:
-			return self._error_response(f"Failed to open release page: {str(e)}")
-	
-	def force_refresh_cache(self):
-		"""Force refresh the application cache (restarts the app)"""
-		try:
-			if getattr(sys, 'frozen', False):
-				current_exe = sys.executable
-				
-				# Create batch script for restarting with cache clear
-				batch_script = os.path.join(get_data_path(), "refresh.bat")
-				
-				with open(batch_script, 'w') as f:
-					f.write(f'''@echo off
-echo Refreshing application cache...
-timeout /t 1 /nobreak > nul
-taskkill /f /im "{os.path.basename(current_exe)}" > nul 2>&1
-timeout /t 1 /nobreak > nul
-start "" "{current_exe}" --clear-cache --force-reload
-del "{batch_script}" > nul 2>&1
-''')
-				
-				# Start the refresh process
-				subprocess.Popen(['cmd', '/c', batch_script], creationflags=subprocess.CREATE_NO_WINDOW)
-				
-				# Schedule application exit
-				import threading
-				def delayed_exit():
-					time.sleep(1)
-					os._exit(0)
-				
-				threading.Thread(target=delayed_exit, daemon=True).start()
-				
-				return self._success_response("Refreshing application cache - restarting...")
-			else:
-				return self._error_response("Cache refresh only available in compiled version")
-				
-		except Exception as e:
-			return self._error_response(f"Failed to refresh cache: {str(e)}")
 
 def get_resource_path(relative_path):
 	"""Get absolute path to resource, works for dev and for PyInstaller"""
@@ -404,14 +343,8 @@ def main():
 	# Use resource path function to handle both development and compiled versions
 	html_file = get_resource_path("index.html")
 	
-	# Check for cache clearing flags (used after updates)
-	clear_cache = "--clear-cache" in sys.argv
-	force_reload = "--force-reload" in sys.argv
-	
-	# Get the HTML file URL with cache clearing parameter if needed
+	# Get the HTML file URL
 	html_url = get_html_file_url(html_file)
-	if clear_cache or force_reload:
-		html_url += "?clear-cache=true"
 	
 	webview.create_window(
 		"Bad-Bandit IMS",
@@ -423,20 +356,7 @@ def main():
 		js_api=api
 	)
 	
-	# Use configuration to control caching
-	webview_config = {
-		'debug': False
-	}
-	
-	# Use private mode when cache clearing is requested
-	if clear_cache or force_reload:
-		webview_config['private_mode'] = True
-		if force_reload:
-			print("Starting with forced resource reload after update")
-		else:
-			print("Starting with cache clearing enabled")
-	
-	webview.start(**webview_config)
+	webview.start()
 
 if __name__ == "__main__":
 	main()

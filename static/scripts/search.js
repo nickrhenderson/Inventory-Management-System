@@ -52,7 +52,17 @@ function unregisterAnimation(timeoutId) {
  * Helper function to get products table body
  */
 function getProductsTableBody() {
-    return document.getElementById('productsTableBody');
+    // First try to get the regular table body
+    let tbody = document.getElementById('productsTableBody');
+    
+    // If not found and groups exist, we might need to search within groups
+    if (!tbody && window.productGroups && window.productGroups.length > 0) {
+        // When groups exist, we need to handle searches differently
+        // Return a pseudo-tbody that represents all group bodies
+        tbody = document.querySelector('.group-products-body');
+    }
+    
+    return tbody;
 }
 
 /**
@@ -267,7 +277,6 @@ window.getCurrentSearchTerm = getCurrentSearchTerm;
 async function performDynamicSearch(searchTerm, searchId = 0) {
     try {
         // First, ensure ingredients are loaded if needed
-        const titleTextElement = getIngredientsTitleText();
         const rightContainer = getRightBoxContent();
         const hasIngredientsContent = rightContainer && rightContainer.querySelector('.ingredients-list');
         
@@ -279,12 +288,12 @@ async function performDynamicSearch(searchTerm, searchId = 0) {
                     await loadProductIngredients(window.selectedProductId);
                 } catch (error) {
                     console.error('Error loading product ingredients:', error);
-                    // Fall back to all ingredients
-                    await displayAllIngredients();
+                    // Fall back to all ingredients - pre-filter with search term to prevent flash
+                    await displayAllIngredients(false, false, searchTerm);
                 }
             } else {
-                // Load all ingredients
-                await displayAllIngredients();
+                // Load all ingredients - pre-filter with search term to prevent flash
+                await displayAllIngredients(false, false, searchTerm);
             }
         }
         
@@ -328,6 +337,12 @@ async function performAsyncSearch(searchTerm, signal = null, searchId = 0) {
 async function buildFilteredProductsTable(searchTerm, searchId = 0) {
     const tbody = getProductsTableBody();
     if (!tbody || !window.allProductsData) return;
+    
+    // If groups exist, don't build filtered table - groups handle their own filtering
+    if (window.productGroups && window.productGroups.length > 0) {
+        console.log('Groups exist, skipping buildFilteredProductsTable');
+        return;
+    }
     
     // Run product search and ingredient analysis in parallel
     const [matchingProductIds, ingredientFilterData] = await Promise.all([
@@ -394,14 +409,42 @@ async function filterProductsData(searchTerm, searchId = 0) {
             showAllProducts(),
             showAllIngredientsIfApplicable()
         ]);
+        
+        // Show all groups when search is cleared
+        if (window.showAllGroups) {
+            window.showAllGroups();
+        }
         return;
     }
     
     // Get existing rows to check if we need to rebuild
-    const allRows = Array.from(tbody.querySelectorAll('tr'));
+    // When groups exist, we need to get rows from all groups AND ungrouped section
+    let allRows = [];
+    const hasGroups = window.productGroups && window.productGroups.length > 0;
+    
+    if (hasGroups) {
+        // Get rows from all group bodies
+        const groupRows = Array.from(document.querySelectorAll('.group-products-body tr'));
+        // Get rows from ungrouped section
+        const ungroupedRows = Array.from(document.querySelectorAll('.ungrouped-products tbody tr'));
+        allRows = [...groupRows, ...ungroupedRows];
+    } else {
+        // Regular table without groups
+        allRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+    }
     
     // Check if table is empty - if so, we need to build it first with filtered products
     if (allRows.length === 0) {
+        // If groups exist but no rows, something is wrong - re-render groups
+        if (hasGroups && window.renderGroups) {
+            window.renderGroups(true);
+            // After rendering, perform the search again
+            if (searchTerm) {
+                setTimeout(() => filterProductsData(searchTerm, searchId), 100);
+            }
+            return;
+        }
+        
         // Table is empty, build it with filtered products directly
         await buildFilteredProductsTable(searchTerm, searchId);
         return;
@@ -431,6 +474,30 @@ async function filterProductsData(searchTerm, searchId = 0) {
     
     // Build a set of product IDs that should be visible
     const shouldBeVisibleIds = new Set(productsToShow.map(p => p.id));
+    
+    // Filter groups based on visible products
+    if (window.filterGroupsBySearch) {
+        window.filterGroupsBySearch(searchTerm, shouldBeVisibleIds);
+        
+        // If groups exist, we don't need to do the rebuild logic below
+        // The filterGroupsBySearch handles everything
+        if (window.productGroups && window.productGroups.length > 0) {
+            // Handle ingredient filtering
+            if (ingredientFilterData && ingredientFilterData.ingredientsList) {
+                await Promise.all([
+                    fadeOutIngredientItems(ingredientFilterData.nonMatchingItems || [], searchId),
+                    fadeInIngredientItems(ingredientFilterData.matchingItems || [], searchId)
+                ]);
+                
+                if (ingredientFilterData.matchingItems && ingredientFilterData.matchingItems.length === 0) {
+                    showNoIngredientsMessage(ingredientFilterData.ingredientsList);
+                } else {
+                    removeNoIngredientsMessage();
+                }
+            }
+            return; // Exit early - groups handle their own filtering
+        }
+    }
     
     // Check if the table structure matches what we need
     // If products need to be added (not just hidden), rebuild the table with ALL products
@@ -541,6 +608,16 @@ async function filterProductsData(searchTerm, searchId = 0) {
  */
 async function showAllProducts() {
     const tbody = getProductsTableBody();
+    
+    // When groups exist, handle differently
+    if (window.productGroups && window.productGroups.length > 0) {
+        // Show all groups and their products
+        if (window.showAllGroups) {
+            window.showAllGroups();
+        }
+        return;
+    }
+    
     if (!tbody) return;
     
     // Remove any empty message
@@ -606,7 +683,16 @@ function showNoResultsMessage(tbody) {
     // Remove existing message if any
     removeNoResultsMessage(tbody);
     
-    // No message displayed - just clean the table
+    // Add no results message
+    const noResultsRow = document.createElement('tr');
+    noResultsRow.className = 'no-results-row';
+    noResultsRow.innerHTML = `
+        <td colspan="7" style="text-align: center; color: #666; padding: 40px 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 1.5em; color: #666;">No products match your search</h3>
+            <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+        </td>
+    `;
+    tbody.appendChild(noResultsRow);
 }
 
 /**
@@ -759,8 +845,7 @@ function checkDirectProductMatch(product, searchTerm) {
  */
 async function prepareIngredientFilterData(searchTerm) {
     // Check if we're showing "All Ingredients"
-    const titleTextElement = getIngredientsTitleText();
-    if (!titleTextElement || titleTextElement.textContent !== 'All Ingredients') {
+    if (window.currentIngredientsView !== 'all') {
         return null; // Not showing all ingredients, skip filtering
     }
     
@@ -884,8 +969,7 @@ window.filterIngredientsIfApplicable = filterIngredientsIfApplicable;
  */
 async function showAllIngredientsIfApplicable() {
     // Check if we're showing "All Ingredients"
-    const titleTextElement = getIngredientsTitleText();
-    if (!titleTextElement || titleTextElement.textContent !== 'All Ingredients') {
+    if (window.currentIngredientsView !== 'all') {
         return; // Not showing all ingredients, skip
     }
     
@@ -982,7 +1066,16 @@ async function fadeInIngredientItems(items, searchId = 0) {
 function showNoIngredientsMessage(ingredientsList) {
     removeNoIngredientsMessage();
     
-    // No message displayed - just clean the container
+    // Add no results message
+    const noResultsDiv = document.createElement('div');
+    noResultsDiv.className = 'no-ingredients-message';
+    noResultsDiv.innerHTML = `
+        <div style="text-align: center; color: #666; padding: 40px 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 1.5em; color: #666;">No ingredients match your search</h3>
+            <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+        </div>
+    `;
+    ingredientsList.appendChild(noResultsDiv);
 }
 
 /**

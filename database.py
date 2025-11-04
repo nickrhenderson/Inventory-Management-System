@@ -112,7 +112,6 @@ class DatabaseManager:
 						expiration_date DATE,
 						supplier TEXT,
 						is_flagged INTEGER DEFAULT 0,
-						date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
 						last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
 					)
 				''')
@@ -120,6 +119,16 @@ class DatabaseManager:
 			# Add is_flagged column to existing ingredients table if it doesn't exist
 			try:
 				conn.execute('ALTER TABLE ingredients ADD COLUMN is_flagged INTEGER DEFAULT 0')
+			except sqlite3.OperationalError:
+				# Column already exists
+				pass
+			
+			# Add last_updated column to existing ingredients table if it doesn't exist
+			try:
+				conn.execute('ALTER TABLE ingredients ADD COLUMN last_updated DATETIME')
+				# Set default timestamp for existing rows
+				conn.execute("UPDATE ingredients SET last_updated = CURRENT_TIMESTAMP WHERE last_updated IS NULL")
+				print("Added 'last_updated' column to ingredients table")
 			except sqlite3.OperationalError:
 				# Column already exists
 				pass
@@ -136,7 +145,6 @@ class DatabaseManager:
 					total_cost REAL DEFAULT 0.0,
 					amount INTEGER DEFAULT 0,
 					notes TEXT,
-					date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
 					last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
 				)
 			''')
@@ -145,6 +153,16 @@ class DatabaseManager:
 			try:
 				conn.execute('ALTER TABLE products ADD COLUMN amount INTEGER DEFAULT 0')
 				print("Added 'amount' column to products table")
+			except sqlite3.OperationalError:
+				# Column already exists
+				pass
+			
+			# Add last_updated column to existing products table if it doesn't exist
+			try:
+				conn.execute('ALTER TABLE products ADD COLUMN last_updated DATETIME')
+				# Set default timestamp for existing rows
+				conn.execute("UPDATE products SET last_updated = CURRENT_TIMESTAMP WHERE last_updated IS NULL")
+				print("Added 'last_updated' column to products table")
 			except sqlite3.OperationalError:
 				# Column already exists
 				pass
@@ -163,12 +181,39 @@ class DatabaseManager:
 				)
 			''')
 			
+			# Create groups table for organizing products
+			conn.execute('''
+				CREATE TABLE IF NOT EXISTS groups (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL,
+					display_order INTEGER DEFAULT 0,
+					is_collapsed INTEGER DEFAULT 0,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+				)
+			''')
+			
+			# Create group_products junction table for product-group relationships
+			conn.execute('''
+				CREATE TABLE IF NOT EXISTS group_products (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					group_id INTEGER NOT NULL,
+					product_id INTEGER NOT NULL,
+					FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
+					FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
+					UNIQUE(product_id)
+				)
+			''')
+			
 			# Create indexes for better performance
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_ingredients_barcode ON ingredients(barcode_id)')
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode_id)')
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_products_date_mixed ON products(date_mixed)')
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_product ON product_ingredients(product_id)')
 			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)')
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_groups_order ON groups(display_order)')
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_group_products_group ON group_products(group_id)')
+			conn.execute('CREATE INDEX IF NOT EXISTS idx_group_products_product ON group_products(product_id)')
 			
 			conn.commit()
 		
@@ -189,16 +234,17 @@ class DatabaseManager:
 				expiration_date DATE,
 				supplier TEXT,
 				is_flagged INTEGER DEFAULT 0,
-				date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
 				last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
 			)
 		''')
 		
 		# Copy data from old table to new table (excluding unit and category)
+		# Use COALESCE to handle missing last_updated column in old databases
 		conn.execute('''
-			INSERT INTO ingredients_new (id, barcode_id, name, unit_cost, purchase_date, expiration_date, supplier, is_flagged, date_added, last_updated)
+			INSERT INTO ingredients_new (id, barcode_id, name, unit_cost, purchase_date, expiration_date, supplier, is_flagged, last_updated)
 			SELECT id, barcode_id, name, unit_cost, purchase_date, expiration_date, supplier, 
-			       COALESCE(is_flagged, 0), date_added, last_updated
+			       COALESCE(is_flagged, 0), 
+			       COALESCE(last_updated, CURRENT_TIMESTAMP)
 			FROM ingredients
 		''')
 		
@@ -243,9 +289,9 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, amount, notes, date_added
+				       total_quantity, total_cost, amount, notes
 				FROM products 
-				ORDER BY date_mixed DESC, date_added DESC
+				ORDER BY date_mixed DESC
 			''')
 			return [dict(row) for row in cursor.fetchall()]
 	
@@ -360,12 +406,12 @@ class DatabaseManager:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.execute('''
 				SELECT DISTINCT p.id, p.barcode_id, p.product_name, p.batch_number, p.date_mixed, 
-				       p.total_quantity, p.total_cost, p.amount, p.notes, p.date_added
+				       p.total_quantity, p.total_cost, p.amount, p.notes
 				FROM products p
 				JOIN product_ingredients pi ON p.id = pi.product_id
 				JOIN ingredients i ON pi.ingredient_id = i.id
 				WHERE LOWER(i.name) LIKE LOWER(?)
-				ORDER BY p.date_mixed DESC, p.date_added DESC
+				ORDER BY p.date_mixed DESC
 			''', (f'%{ingredient_name}%',))
 			rows = cursor.fetchall()
 			return [dict(row) for row in rows]
@@ -376,12 +422,12 @@ class DatabaseManager:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.execute('''
 				SELECT DISTINCT p.id, p.barcode_id, p.product_name, p.batch_number, p.date_mixed, 
-				       p.total_quantity, p.total_cost, p.amount, p.notes, p.date_added
+				       p.total_quantity, p.total_cost, p.amount, p.notes
 				FROM products p
 				JOIN product_ingredients pi ON p.id = pi.product_id
 				JOIN ingredients i ON pi.ingredient_id = i.id
 				WHERE i.barcode_id LIKE ?
-				ORDER BY p.date_mixed DESC, p.date_added DESC
+				ORDER BY p.date_mixed DESC
 			''', (f'{barcode_id}%',))
 			rows = cursor.fetchall()
 			return [dict(row) for row in rows]
@@ -404,7 +450,7 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, amount, notes, date_added
+				       total_quantity, total_cost, amount, notes
 				FROM products 
 				WHERE id = ?
 			''', (product_id,))
@@ -732,3 +778,146 @@ class DatabaseManager:
 	def get_inventory_data(self):
 		"""Legacy method - now returns products data for compatibility"""
 		return self.get_products_data()
+	
+	# Group Management Methods
+	
+	def get_all_groups(self):
+		"""Get all groups ordered by display_order"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT id, name, display_order, is_collapsed
+				FROM groups
+				ORDER BY display_order
+			''')
+			groups = [dict(row) for row in cursor.fetchall()]
+			
+			# For each group, get the product IDs
+			for group in groups:
+				cursor = conn.execute('''
+					SELECT product_id
+					FROM group_products
+					WHERE group_id = ?
+				''', (group['id'],))
+				group['product_ids'] = [row[0] for row in cursor.fetchall()]
+			
+			return groups
+	
+	def create_group(self, group_name):
+		"""Create a new group"""
+		try:
+			with self._get_db_connection() as conn:
+				# Get the max display_order
+				cursor = conn.execute('SELECT MAX(display_order) as max_order FROM groups')
+				result = cursor.fetchone()
+				next_order = (result['max_order'] or -1) + 1
+				
+				# Insert the group
+				cursor = conn.execute('''
+					INSERT INTO groups (name, display_order, is_collapsed)
+					VALUES (?, ?, 0)
+				''', (group_name, next_order))
+				
+				group_id = cursor.lastrowid
+				conn.commit()
+				
+				return self._success_response(
+					"Group created successfully",
+					group_id=group_id,
+					display_order=next_order
+				)
+		except Exception as e:
+			return self._error_response(e)
+	
+	def delete_group(self, group_id):
+		"""Delete a group (products are not deleted, just removed from group)"""
+		try:
+			with self._get_db_connection() as conn:
+				# Verify group exists
+				group = conn.execute('SELECT name FROM groups WHERE id = ?', (group_id,)).fetchone()
+				if not group:
+					return self._error_response("Group not found")
+				
+				group_name = group['name']
+				
+				# Delete group-product relationships (CASCADE will handle this, but explicit is clear)
+				conn.execute('DELETE FROM group_products WHERE group_id = ?', (group_id,))
+				
+				# Delete the group
+				conn.execute('DELETE FROM groups WHERE id = ?', (group_id,))
+				conn.commit()
+				
+				return self._success_response(f"Group '{group_name}' deleted successfully")
+		except Exception as e:
+			return self._error_response(e)
+	
+	def update_group_order(self, group_id, new_order):
+		"""Update the display order of a group"""
+		try:
+			with self._get_db_connection() as conn:
+				conn.execute('''
+					UPDATE groups 
+					SET display_order = ?, last_updated = CURRENT_TIMESTAMP 
+					WHERE id = ?
+				''', (new_order, group_id))
+				conn.commit()
+				
+				return self._success_response("Group order updated successfully")
+		except Exception as e:
+			return self._error_response(e)
+	
+	def update_group_collapsed_state(self, group_id, is_collapsed):
+		"""Update whether a group is collapsed"""
+		try:
+			with self._get_db_connection() as conn:
+				conn.execute('''
+					UPDATE groups 
+					SET is_collapsed = ?, last_updated = CURRENT_TIMESTAMP 
+					WHERE id = ?
+				''', (1 if is_collapsed else 0, group_id))
+				conn.commit()
+				
+				return self._success_response("Group collapsed state updated successfully")
+		except Exception as e:
+			return self._error_response(e)
+	
+	def add_product_to_group(self, group_id, product_id):
+		"""Add a product to a group"""
+		try:
+			with self._get_db_connection() as conn:
+				# Remove product from any existing group first (UNIQUE constraint on product_id)
+				conn.execute('DELETE FROM group_products WHERE product_id = ?', (product_id,))
+				
+				# Add to new group
+				conn.execute('''
+					INSERT INTO group_products (group_id, product_id)
+					VALUES (?, ?)
+				''', (group_id, product_id))
+				
+				conn.commit()
+				
+				return self._success_response("Product added to group successfully")
+		except Exception as e:
+			return self._error_response(e)
+	
+	def remove_product_from_group(self, product_id):
+		"""Remove a product from its group"""
+		try:
+			with self._get_db_connection() as conn:
+				conn.execute('DELETE FROM group_products WHERE product_id = ?', (product_id,))
+				conn.commit()
+				
+				return self._success_response("Product removed from group successfully")
+		except Exception as e:
+			return self._error_response(e)
+	
+	def get_product_group(self, product_id):
+		"""Get the group that a product belongs to (if any)"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT g.id, g.name, g.display_order, g.is_collapsed
+				FROM groups g
+				JOIN group_products gp ON g.id = gp.group_id
+				WHERE gp.product_id = ?
+			''', (product_id,))
+			row = cursor.fetchone()
+			return dict(row) if row else None

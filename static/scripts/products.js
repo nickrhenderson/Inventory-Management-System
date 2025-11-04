@@ -3,9 +3,12 @@
 // Global variables for product management
 let allProductsData = [];
 let selectedProductId = null;
+let currentIngredientsView = 'all'; // 'all' or 'product'
 
 // Make selectedProductId globally accessible
 window.selectedProductId = selectedProductId;
+window.currentIngredientsView = currentIngredientsView;
+window.animateProductRowIn = animateProductRowIn;
 
 /**
  * Animate product row in (without the gray-to-white highlight effect)
@@ -34,30 +37,61 @@ async function loadProductsData() {
         
         await waitForPywebview();
         
+        // Load groups first (if loadGroupsFromDatabase function exists)
+        if (typeof loadGroupsFromDatabase === 'function') {
+            await loadGroupsFromDatabase();
+        }
+        
         const productsData = await pywebview.api.get_products_data();
         
         // Store data globally
         allProductsData = [...productsData];
         window.allProductsData = allProductsData;
         
-        // Create table structure
-        const tableHTML = createProductsTableHTML();
-        container.innerHTML = tableHTML;
+        // Check if there are no products
+        if (allProductsData.length === 0) {
+            displayNoProductsMessage(container);
+            return;
+        }
+        
+        // Check if we should render groups or regular table
+        if (window.productGroups && window.productGroups.length > 0) {
+            // Render using groups system
+            if (typeof renderGroups === 'function') {
+                // Don't animate yet - wait for loading screen
+                renderGroups(false);
+                
+                // Set up pending animation to trigger when loading screen completes
+                if (window.loadingScreenComplete) {
+                    // Loading screen already done, animate immediately
+                    setTimeout(() => renderGroups(true), 50);
+                } else {
+                    // Store the animation function to be called when loading screen completes
+                    window.pendingProductAnimation = () => {
+                        renderGroups(true);
+                    };
+                }
+            }
+        } else {
+            // Create regular table structure
+            const tableHTML = createProductsTableHTML();
+            container.innerHTML = tableHTML;
+            
+            // Check if there's a search term and apply it, otherwise show all products
+            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
+            if (searchTerm) {
+                // Apply search filter if user has already typed something
+                const searchId = window.incrementSearchId ? window.incrementSearchId() : 0;
+                await performDynamicSearch(searchTerm, searchId);
+            } else {
+                // Show all products - but wait for loading screen to complete before animating
+                await animateProductsRowsWhenReady(allProductsData);
+            }
+        }
         
         // Initialize search
         initializeSearch();
         initializeAmountChangeDetection();
-        
-        // Check if there's a search term and apply it, otherwise show all products
-        const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
-        if (searchTerm) {
-            // Apply search filter if user has already typed something
-            const searchId = window.incrementSearchId ? window.incrementSearchId() : 0;
-            await performDynamicSearch(searchTerm, searchId);
-        } else {
-            // Show all products - but wait for loading screen to complete before animating
-            await animateProductsRowsWhenReady(allProductsData);
-        }
         
     } catch (error) {
         console.error(ERROR_MESSAGES.LOAD_PRODUCTS_FAILED, error);
@@ -83,6 +117,12 @@ async function refreshInventoryData() {
         // Load fresh product data from database (no loading spinner during refresh)
         
         await waitForPywebview();
+        
+        // Load groups first (if loadGroupsFromDatabase function exists)
+        if (typeof loadGroupsFromDatabase === 'function') {
+            await loadGroupsFromDatabase();
+        }
+        
         const productsData = await pywebview.api.get_products_data();
         
         const container = document.getElementById('inventoryTable');
@@ -91,21 +131,39 @@ async function refreshInventoryData() {
         allProductsData = [...productsData];
         window.allProductsData = allProductsData;
         
-        // Create empty table structure
-        const tableHTML = createProductsTableHTML();
-        container.innerHTML = tableHTML;
+        // Check if there are no products
+        if (allProductsData.length === 0) {
+            displayNoProductsMessage(container);
+            return;
+        }
+        
+        // Check if we should render groups or regular table
+        if (window.productGroups && window.productGroups.length > 0) {
+            // Render using groups system
+            if (window.renderGroups) {
+                window.renderGroups();
+            } else {
+                // Fallback to regular table if renderGroups not available
+                const tableHTML = createProductsTableHTML();
+                container.innerHTML = tableHTML;
+            }
+        } else {
+            // Create empty table structure (no groups)
+            const tableHTML = createProductsTableHTML();
+            container.innerHTML = tableHTML;
+        }
         
         // Re-initialize search (without displaying products)
         initializeSearch();
         initializeAmountChangeDetection();
         
         // Check if we need to refresh ingredients panel
-        const titleTextElement = document.getElementById('ingredientsTitleText');
-        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
+        const isShowingAllIngredients = window.currentIngredientsView === 'all';
         
         if (isShowingAllIngredients) {
-            // Refresh the ingredients panel - it will respect the search term
-            await displayAllIngredients();
+            // Refresh the ingredients panel - pre-filter with search term to prevent flash
+            // Skip animation since this is a refresh, and pre-filter to only show matching items
+            await displayAllIngredients(true, false, searchTerm);
         }
         
         // Apply search immediately to both products and ingredients (this will populate tables with filtered results)
@@ -138,7 +196,12 @@ window.refreshInventoryData = refreshInventoryData;
  * @param {HTMLElement} container - Container element to show message in
  */
 function displayNoProductsMessage(container) {
-    container.innerHTML = '';
+    container.innerHTML = `
+        <div class="empty-state-message">
+            <h3>Add Product</h3>
+            <p>Right click and select "Add Product"</p>
+        </div>
+    `;
 }
 
 /**
@@ -387,7 +450,8 @@ async function selectProduct(productId) {
  * @param {number} productId - ID of the selected product
  */
 function updateProductSelection(productId) {
-    const rows = document.querySelectorAll('#productsTableBody tr');
+    // Select rows from both ungrouped table and group tables
+    const rows = document.querySelectorAll('#productsTableBody tr, .group-products-body tr, .ungrouped-products tbody tr');
     rows.forEach(row => {
         if (row.dataset.productId == productId) {
             row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.SELECTED_PRODUCT);
@@ -471,8 +535,7 @@ async function unselectCurrentProduct() {
  */
 async function resetIngredientsPanel() {
     // Check if "All Ingredients" is already showing to avoid unnecessary reload
-    const titleTextElement = document.getElementById('ingredientsTitleText');
-    const isAlreadyShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
+    const isAlreadyShowingAllIngredients = window.currentIngredientsView === 'all';
     
     // Get current search term to apply after loading
     const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';

@@ -15,6 +15,9 @@ async function openProductModal(productData = null, isEditMode = false) {
         // Load available ingredients first
         await loadAvailableIngredients();
         
+        // Populate group dropdown
+        populateGroupDropdown(productData);
+        
         // Show modal
         const modal = document.getElementById('productModalBackdrop');
         if (modal) {
@@ -94,6 +97,41 @@ async function loadAvailableIngredients() {
         // Fallback - show empty selector
         availableIngredients = [];
         displayIngredientSelector([]);
+    }
+}
+
+/**
+ * Populate group dropdown with available groups
+ * @param {Object} productData - Product data (optional, for edit mode)
+ */
+function populateGroupDropdown(productData = null) {
+    const groupSelect = document.getElementById('productGroup');
+    if (!groupSelect) return;
+    
+    // Clear existing options except the first "None" option
+    groupSelect.innerHTML = '<option value="">None</option>';
+    
+    // Get available groups from window.productGroups
+    if (window.productGroups && window.productGroups.length > 0) {
+        window.productGroups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = group.name;
+            groupSelect.appendChild(option);
+        });
+    }
+    
+    // If editing a product, select the group it belongs to
+    if (productData && productData.id && window.productGroups) {
+        const productGroup = window.productGroups.find(g => g.productIds.includes(productData.id));
+        if (productGroup) {
+            groupSelect.value = productGroup.id;
+        } else {
+            groupSelect.value = ''; // Set to None
+        }
+    } else {
+        // Default to None for new products
+        groupSelect.value = '';
     }
 }
 
@@ -621,6 +659,38 @@ function attachProductFormListener() {
 }
 
 /**
+ * Handle group assignment for a product
+ * @param {number} productId - ID of the product
+ * @param {number|null} groupId - ID of the group to assign to (null for no group)
+ */
+async function handleGroupAssignment(productId, groupId) {
+    if (!window.productGroups) return;
+    
+    try {
+        if (groupId) {
+            // Add product to the specified group (also removes from any other group)
+            await addProductToGroup(groupId, productId);
+        } else {
+            // Remove product from any group
+            await removeProductFromGroup(null, productId);
+        }
+    } catch (error) {
+        console.error('Failed to handle group assignment:', error);
+        // Still update local cache even if database save fails
+        window.productGroups.forEach(group => {
+            group.productIds = group.productIds.filter(id => id !== productId);
+        });
+        
+        if (groupId) {
+            const targetGroup = window.productGroups.find(g => g.id === groupId);
+            if (targetGroup && !targetGroup.productIds.includes(productId)) {
+                targetGroup.productIds.push(productId);
+            }
+        }
+    }
+}
+
+/**
  * Handle product form submission
  * @param {Event} event - Form submission event
  */
@@ -659,6 +729,10 @@ async function handleProductSubmission(event) {
         console.log('API result:', result);
         
         if (result.success) {
+            // Handle group assignment after product creation/update
+            const productId = isEditMode ? productData.id : result.product_id;
+            await handleGroupAssignment(productId, productData.group_id);
+            
             if (isEditMode) {
                 handleProductUpdateSuccess(submitButton, barcodeResult, productData.product_name);
             } else {
@@ -731,11 +805,16 @@ function collectProductFormData() {
         throw new Error(ERROR_MESSAGES.VALIDATION_INGREDIENTS);
     }
     
+    // Get selected group (optional)
+    const groupSelect = document.getElementById('productGroup');
+    const selectedGroupId = groupSelect ? groupSelect.value : '';
+    
     return {
         product_name: productName,
         mixed_date: mixedDate,
         amount: amount,
-        ingredients: selectedIngredients
+        ingredients: selectedIngredients,
+        group_id: selectedGroupId ? parseInt(selectedGroupId) : null
     };
 }
 
@@ -1137,23 +1216,8 @@ function handleIngredientCreationSuccess(submitButton, result) {
             window.clearSearchCache();
         }
         
-        // Check if we're showing "All Ingredients" and reload them specifically
-        const titleTextElement = document.getElementById('ingredientsTitleText');
-        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
-        
-        if (isShowingAllIngredients) {
-            // Reload ingredients panel to include the new ingredient
-            await displayAllIngredients();
-            
-            // Re-apply current search filter if any
-            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
-            if (searchTerm && window.filterIngredientsIfApplicable) {
-                await window.filterIngredientsIfApplicable(searchTerm, 0);
-            }
-        } else {
-            // Use standard refresh for other cases
-            await refreshInventoryData();
-        }
+        // Use unified refresh to reload data with search persistence
+        await refreshInventoryData();
         // Note: No auto-close for ingredient modal - user must manually close
     }, 300);
 }
@@ -1210,23 +1274,8 @@ function handleIngredientUpdateSuccess(submitButton, result) {
             window.clearSearchCache();
         }
         
-        // Check if we're showing "All Ingredients" and reload them specifically
-        const titleTextElement = document.getElementById('ingredientsTitleText');
-        const isShowingAllIngredients = titleTextElement && titleTextElement.textContent === 'All Ingredients';
-        
-        if (isShowingAllIngredients) {
-            // Reload ingredients panel to reflect the updated ingredient
-            await displayAllIngredients();
-            
-            // Re-apply current search filter if any
-            const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
-            if (searchTerm && window.filterIngredientsIfApplicable) {
-                await window.filterIngredientsIfApplicable(searchTerm, 0);
-            }
-        } else {
-            // Use standard refresh for other cases
-            await refreshInventoryData();
-        }
+        // Use unified refresh to reload data with search persistence
+        await refreshInventoryData();
         // Note: No auto-close for ingredient modal - user must manually close
     }, 300);
 }
@@ -1315,3 +1364,133 @@ function initializeModalEventListeners() {
 
 // Initialize event listeners
 initializeModalEventListeners();
+
+/**
+ * Open group creation modal
+ */
+function openGroupModal() {
+    console.log('openGroupModal called');
+    
+    const backdrop = document.getElementById('groupModalBackdrop');
+    const modal = document.getElementById('groupModal');
+    const form = document.getElementById('groupForm');
+    
+    console.log('Modal elements:', { backdrop, modal, form });
+    
+    if (!backdrop || !modal || !form) {
+        console.error('Group modal elements not found');
+        return;
+    }
+    
+    // Reset form
+    form.reset();
+    
+    // Show modal with correct class
+    backdrop.classList.add('open');
+    
+    // Focus on group name input
+    const groupNameInput = document.getElementById('groupName');
+    if (groupNameInput) {
+        setTimeout(() => groupNameInput.focus(), 100);
+    }
+    
+    // Add form submit handler
+    form.removeEventListener('submit', handleGroupSubmission);
+    form.addEventListener('submit', handleGroupSubmission);
+    
+    console.log('Group modal opened successfully');
+}
+
+/**
+ * Close group creation modal
+ */
+function closeGroupModal() {
+    const backdrop = document.getElementById('groupModalBackdrop');
+    const form = document.getElementById('groupForm');
+    
+    if (!backdrop) return;
+    
+    backdrop.classList.remove('open');
+    
+    setTimeout(() => {
+        if (form) {
+            form.reset();
+        }
+    }, 300);
+}
+
+/**
+ * Handle group form submission
+ * @param {Event} event - Form submit event
+ */
+async function handleGroupSubmission(event) {
+    event.preventDefault();
+    
+    const groupNameInput = document.getElementById('groupName');
+    const submitButton = document.getElementById('submitGroupButton');
+    
+    if (!groupNameInput || !submitButton) return;
+    
+    const groupName = groupNameInput.value.trim();
+    
+    if (!groupName) {
+        alert('Please enter a group name');
+        return;
+    }
+    
+    // Disable submit button and show processing state
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating...';
+    
+    try {
+        // Create the group (now async - saves to database)
+        if (typeof createGroup === 'function') {
+            await createGroup(groupName);
+            
+            // Show success state
+            submitButton.textContent = '✓ Created';
+            submitButton.style.backgroundColor = '#28a745';
+            submitButton.style.color = 'white';
+            
+            // Wait a moment then close modal
+            setTimeout(() => {
+                closeGroupModal();
+                
+                // Reset button state
+                submitButton.textContent = 'Create Group';
+                submitButton.style.backgroundColor = '';
+                submitButton.style.color = '';
+                submitButton.disabled = false;
+                
+                // Render groups to show the new group
+                if (typeof renderGroups === 'function') {
+                    renderGroups();
+                }
+            }, 500);
+        } else {
+            throw new Error('createGroup function not available');
+        }
+    } catch (error) {
+        console.error('Error creating group:', error);
+        
+        // Show failure state
+        submitButton.textContent = '✗ Failed';
+        submitButton.style.backgroundColor = '#dc3545';
+        submitButton.style.color = 'white';
+        
+        alert('Failed to create group. Please try again.');
+        
+        // Reset button after a delay
+        setTimeout(() => {
+            submitButton.textContent = 'Create Group';
+            submitButton.style.backgroundColor = '';
+            submitButton.style.color = '';
+            submitButton.disabled = false;
+        }, 2000);
+    }
+}
+
+// Make functions globally accessible
+window.openGroupModal = openGroupModal;
+window.closeGroupModal = closeGroupModal;
+window.handleGroupSubmission = handleGroupSubmission;
