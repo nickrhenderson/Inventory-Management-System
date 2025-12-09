@@ -6,10 +6,11 @@ import json
 import tempfile
 import subprocess
 import shutil
+import time
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.5.1"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -262,7 +263,7 @@ class InventoryAPI:
 			return True
 	
 	def download_and_install_update(self):
-		"""Download and install the latest version from GitHub releases"""
+		"""Download latest EXE, spawn a copied updater, then exit to allow replacement."""
 		try:
 			# Get latest release information
 			url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -319,21 +320,20 @@ class InventoryAPI:
 				shutil.rmtree(temp_dir)
 				return self._error_response("Download failed - file is empty or corrupted")
 			
-			# Create a batch file to handle the update process
-			batch_content = f'''@echo off
-timeout /t 2 /nobreak > nul
-move /y "{temp_exe_path}" "{current_exe}"
-start "" "{current_exe}"
-del "%~f0"
-'''
-			batch_path = os.path.join(temp_dir, 'update.bat')
-			with open(batch_path, 'w') as f:
-				f.write(batch_content)
-			
-			# Execute the batch file and exit
-			subprocess.Popen([batch_path], shell=True, creationflags=subprocess.DETACHED_PROCESS)
-			
-			return self._success_response("Update downloaded successfully. Application will restart.")
+			# Create updater.exe by copying current exe to a writable data directory
+			data_dir = get_data_path()
+			updater_path = os.path.join(data_dir, 'Updater.exe')
+			try:
+				shutil.copy2(current_exe, updater_path)
+			except Exception as e:
+				return self._error_response(f"Failed to stage updater: {str(e)}")
+
+			# Launch the updater copy in updater mode and exit this process to release lock
+			args = [updater_path, "--updater", temp_exe_path, current_exe, "relaunch"]
+			subprocess.Popen(args, shell=False, creationflags=subprocess.DETACHED_PROCESS)
+			# Give it a moment to start, then exit hard
+			time.sleep(0.2)
+			os._exit(0)
 			
 		except requests.RequestException as e:
 			return self._error_response(f"Failed to download update: Network error - {str(e)}")
@@ -389,4 +389,35 @@ def main():
 	webview.start()
 
 if __name__ == "__main__":
+	# If started in updater mode, perform replacement and exit
+	if len(sys.argv) >= 5 and sys.argv[1] == "--updater":
+		new_exe = sys.argv[2]
+		target_exe = sys.argv[3]
+		relaunch = (sys.argv[4].lower() == 'relaunch') if len(sys.argv) > 4 else False
+
+		# Retry replacing until the original process releases the file
+		for _ in range(30):
+			try:
+				try:
+					os.replace(new_exe, target_exe)
+				except OSError:
+					shutil.copy2(new_exe, target_exe)
+					try:
+						os.remove(new_exe)
+					except Exception:
+						pass
+				break
+			except PermissionError:
+				time.sleep(0.5)
+			except Exception:
+				time.sleep(0.5)
+
+		if relaunch:
+			try:
+				subprocess.Popen([target_exe], shell=False)
+			except Exception:
+				pass
+		sys.exit(0)
+
+	# Normal app start
 	main()
