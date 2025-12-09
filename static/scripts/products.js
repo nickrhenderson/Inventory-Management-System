@@ -5,10 +5,56 @@ let allProductsData = [];
 let selectedProductId = null;
 let currentIngredientsView = 'all'; // 'all' or 'product'
 
+// Intersection Observer for viewport-based animations
+let productRowObserver = null;
+
 // Make selectedProductId globally accessible
 window.selectedProductId = selectedProductId;
 window.currentIngredientsView = currentIngredientsView;
 window.animateProductRowIn = animateProductRowIn;
+window.initProductRowObserver = initProductRowObserver;
+window.cleanupProductRowObserver = cleanupProductRowObserver;
+
+/**
+ * Initialize Intersection Observer for product row animations
+ */
+function initProductRowObserver() {
+    if (productRowObserver) {
+        productRowObserver.disconnect();
+    }
+    
+    const observerOptions = {
+        root: null, // viewport
+        rootMargin: '50px', // Start animating 50px before entering viewport
+        threshold: 0.01 // Trigger when even 1% is visible
+    };
+    
+    productRowObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const row = entry.target;
+                // Only animate if it hasn't been animated yet
+                if (row.classList.contains(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN)) {
+                    animateProductRowIn(row);
+                }
+                // Stop observing once animated
+                productRowObserver.unobserve(row);
+            }
+        });
+    }, observerOptions);
+    
+    return productRowObserver;
+}
+
+/**
+ * Cleanup product row observer
+ */
+function cleanupProductRowObserver() {
+    if (productRowObserver) {
+        productRowObserver.disconnect();
+        productRowObserver = null;
+    }
+}
 
 /**
  * Animate product row in (without the gray-to-white highlight effect)
@@ -162,8 +208,8 @@ async function refreshInventoryData() {
         
         if (isShowingAllIngredients) {
             // Refresh the ingredients panel - pre-filter with search term to prevent flash
-            // Skip animation since this is a refresh, and pre-filter to only show matching items
-            await displayAllIngredients(true, false, searchTerm);
+            // Use animation (false = don't skip) to trigger intersection observer for viewport-based animations
+            await displayAllIngredients(false, false, searchTerm);
         }
         
         // Apply search immediately to both products and ingredients (this will populate tables with filtered results)
@@ -325,13 +371,17 @@ async function animateProductsRowsWhenReady(data) {
 
 /**
  * Animate existing product rows that are already in the DOM
+ * Uses Intersection Observer to only animate rows in viewport
  */
 function animateExistingProductRows() {
     const rows = document.querySelectorAll('#productsTableBody tr');
-    rows.forEach((row, index) => {
-        setTimeout(() => {
-            animateProductRowIn(row);
-        }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
+    
+    // Initialize observer
+    const observer = initProductRowObserver();
+    
+    // Observe all rows
+    rows.forEach(row => {
+        observer.observe(row);
     });
 }
 
@@ -515,8 +565,8 @@ function clearProductSelection() {
     selectedProductId = null;
     window.selectedProductId = null; // Update global reference
     
-    // Remove selection highlighting from all rows
-    const rows = document.querySelectorAll('#productsTableBody tr');
+    // Remove selection highlighting from all rows (ungrouped and grouped)
+    const rows = document.querySelectorAll('#productsTableBody tr, .group-products-body tr, .ungrouped-products tbody tr');
     rows.forEach(row => {
         row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.SELECTED_PRODUCT);
     });

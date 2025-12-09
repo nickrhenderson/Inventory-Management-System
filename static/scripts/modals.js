@@ -221,6 +221,20 @@ async function populateProductForm(productData) {
     } catch (error) {
         console.error('Error loading product ingredients for edit:', error);
     }
+
+        // After ingredients and basic fields populated, load group parameters for this product if in a group
+        try {
+            const groupSelect = document.getElementById('productGroup');
+            if (groupSelect && groupSelect.value) {
+                await loadSelectedGroupParameters(groupSelect.value, productData.id);
+            } else {
+                // Ensure wrapper hidden when no group
+                const wrapper = document.getElementById('productGroupParametersWrapper');
+                if (wrapper) wrapper.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Failed to load group parameters for edited product:', e);
+        }
 }
 
 /**
@@ -729,8 +743,13 @@ async function handleProductSubmission(event) {
         console.log('API result:', result);
         
         if (result.success) {
+            // Store parameter values temporarily to persist after group assignment
+            window.pendingParameterValues = productData.parameter_values || [];
             // Handle group assignment after product creation/update
             const productId = isEditMode ? productData.id : result.product_id;
+            if (!isEditMode) {
+                window.latestCreatedProductId = productId;
+            }
             await handleGroupAssignment(productId, productData.group_id);
             
             if (isEditMode) {
@@ -808,13 +827,25 @@ function collectProductFormData() {
     // Get selected group (optional)
     const groupSelect = document.getElementById('productGroup');
     const selectedGroupId = groupSelect ? groupSelect.value : '';
+
+    // Collect custom parameter values if wrapper visible
+    const parameterValues = [];
+    const paramInputs = document.querySelectorAll('#productGroupParametersContainer .product-group-parameter-input');
+    paramInputs.forEach(input => {
+        const paramId = parseInt(input.dataset.parameterId);
+        const val = input.value.trim();
+        if (paramId) {
+            parameterValues.push({ parameter_id: paramId, value: val });
+        }
+    });
     
     return {
         product_name: productName,
         mixed_date: mixedDate,
         amount: amount,
         ingredients: selectedIngredients,
-        group_id: selectedGroupId ? parseInt(selectedGroupId) : null
+        group_id: selectedGroupId ? parseInt(selectedGroupId) : null,
+        parameter_values: parameterValues
     };
 }
 
@@ -850,6 +881,15 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
         }
         
         await refreshInventoryData();
+
+        // After product is created and group assignment done, save parameter values if any
+        try {
+            if (window.latestCreatedProductId && window.pendingParameterValues && window.pendingParameterValues.length > 0) {
+                await pywebview.api.set_product_group_parameter_values(window.latestCreatedProductId, window.pendingParameterValues);
+            }
+        } catch (e) {
+            console.error('Failed to save product parameter values:', e);
+        }
         
         // Auto-close product modal after refresh
         setTimeout(() => {
@@ -912,6 +952,26 @@ function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
         }
         
         await refreshInventoryData();
+
+        // Save parameter values for existing product
+        try {
+            if (window.editingProductData && window.editingProductData.id) {
+                const paramValues = [];
+                const paramInputs = document.querySelectorAll('#productGroupParametersContainer .product-group-parameter-input');
+                paramInputs.forEach(input => {
+                    const pid = parseInt(input.dataset.parameterId);
+                    const val = input.value.trim();
+                    if (pid) {
+                        paramValues.push({ parameter_id: pid, value: val });
+                    }
+                });
+                if (paramValues.length > 0) {
+                    await pywebview.api.set_product_group_parameter_values(window.editingProductData.id, paramValues);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to update product parameter values:', e);
+        }
         
         // Auto-close product modal after refresh
         setTimeout(() => {
@@ -1384,6 +1444,20 @@ function openGroupModal() {
     
     // Reset form
     form.reset();
+
+    // Creation mode flags
+    window.editingGroupId = null;
+    window.originalGroupParameters = [];
+    const titleEl = document.querySelector('#groupModal h3');
+    if (titleEl) titleEl.textContent = 'Create Group';
+    const submitBtn = document.getElementById('submitGroupButton');
+    if (submitBtn) submitBtn.textContent = 'Create Group';
+
+    // Clear any existing parameter fields
+    const paramsContainer = document.getElementById('groupParametersContainer');
+    if (paramsContainer) {
+        paramsContainer.innerHTML = '';
+    }
     
     // Show modal with correct class
     backdrop.classList.add('open');
@@ -1400,6 +1474,58 @@ function openGroupModal() {
     
     console.log('Group modal opened successfully');
 }
+
+// Open group edit modal
+async function openEditGroupModal(groupId) {
+    const backdrop = document.getElementById('groupModalBackdrop');
+    const form = document.getElementById('groupForm');
+    const paramsContainer = document.getElementById('groupParametersContainer');
+    const titleEl = document.querySelector('#groupModal h3');
+    const submitBtn = document.getElementById('submitGroupButton');
+    if (!backdrop || !form || !paramsContainer) return;
+    // Find group data
+    const group = window.productGroups ? window.productGroups.find(g => g.id === groupId) : null;
+    if (!group) return;
+    // Set flags
+    window.editingGroupId = groupId;
+    window.originalGroupParameters = [];
+    // Reset UI
+    form.reset();
+    paramsContainer.innerHTML = '';
+    // Load existing parameters
+    try {
+        const params = await pywebview.api.get_group_parameters(groupId);
+        window.originalGroupParameters = params || [];
+        (params || []).forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'group-parameter-row';
+            row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-top:6px;';
+            row.innerHTML = `
+                <input type="text" class="group-parameter-input" data-parameter-id="${p.id}" value="${p.name}" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:6px;" maxlength="64" />
+                <button type="button" class="modal-button cancel" style="padding:8px 12px;" onclick="this.parentElement.remove()">Remove</button>
+            `;
+            paramsContainer.appendChild(row);
+        });
+    } catch (e) {
+        console.warn('Failed to load group parameters for edit:', e);
+    }
+    // Set group name
+    const groupNameInput = document.getElementById('groupName');
+    if (groupNameInput) groupNameInput.value = group.name;
+    // Update titles/buttons
+    if (titleEl) titleEl.textContent = 'Edit Group';
+    if (submitBtn) {
+        submitBtn.textContent = 'Save Changes';
+        submitBtn.disabled = false;
+    }
+    // Open modal
+    backdrop.classList.add('open');
+    // Attach handler
+    form.removeEventListener('submit', handleGroupSubmission);
+    form.addEventListener('submit', handleGroupSubmission);
+    setTimeout(() => groupNameInput && groupNameInput.focus(), 100);
+}
+window.openEditGroupModal = openEditGroupModal;
 
 /**
  * Close group creation modal
@@ -1443,46 +1569,94 @@ async function handleGroupSubmission(event) {
     submitButton.textContent = 'Creating...';
     
     try {
-        // Create the group (now async - saves to database)
-        if (typeof createGroup === 'function') {
-            await createGroup(groupName);
-            
-            // Show success state
-            submitButton.textContent = '✓ Created';
+        if (window.editingGroupId) {
+            // EDIT MODE
+            submitButton.textContent = 'Saving...';
+            // Update group name
+            const renameResp = await pywebview.api.update_group_name(window.editingGroupId, groupName);
+            if (!renameResp.success) throw new Error(renameResp.message || 'Failed to rename group');
+            // Determine changes to parameters
+            const existingMap = new Map(window.originalGroupParameters.map(p => [p.id, p.name]));
+            const currentParamInputs = Array.from(document.querySelectorAll('.group-parameter-input'));
+            const remainingIds = new Set();
+            // Create / update
+            for (const input of currentParamInputs) {
+                const name = input.value.trim();
+                if (!name) continue;
+                const pid = input.dataset.parameterId ? parseInt(input.dataset.parameterId) : null;
+                if (pid) {
+                    remainingIds.add(pid);
+                    const originalName = existingMap.get(pid);
+                    if (originalName !== name) {
+                        const upd = await pywebview.api.update_group_parameter(pid, name);
+                        if (!upd.success) console.warn('Failed to update parameter', pid, upd.message);
+                    }
+                } else {
+                    // New parameter
+                    try {
+                        await pywebview.api.create_group_parameter(window.editingGroupId, name);
+                    } catch (e) {
+                        console.warn('Failed to create parameter', name, e);
+                    }
+                }
+            }
+            // Deletions
+            for (const p of window.originalGroupParameters) {
+                if (!remainingIds.has(p.id)) {
+                    try {
+                        await pywebview.api.delete_group_parameter(p.id);
+                    } catch (e) {
+                        console.warn('Failed to delete parameter', p.id, e);
+                    }
+                }
+            }
+            // Success UI
+            submitButton.textContent = '✓ Saved';
             submitButton.style.backgroundColor = '#28a745';
             submitButton.style.color = 'white';
-            
-            // Wait a moment then close modal
-            setTimeout(() => {
+            setTimeout(async () => {
                 closeGroupModal();
-                
-                // Reset button state
+                window.editingGroupId = null;
+                window.originalGroupParameters = [];
                 submitButton.textContent = 'Create Group';
                 submitButton.style.backgroundColor = '';
                 submitButton.style.color = '';
                 submitButton.disabled = false;
-                
-                // Render groups to show the new group
-                if (typeof renderGroups === 'function') {
-                    renderGroups();
-                }
+                if (window.refreshInventoryData) await window.refreshInventoryData();
             }, 500);
         } else {
-            throw new Error('createGroup function not available');
+            // CREATE MODE (previous logic simplified)
+            if (typeof createGroup !== 'function') throw new Error('createGroup function not available');
+            await createGroup(groupName);
+            submitButton.textContent = '✓ Created';
+            submitButton.style.backgroundColor = '#28a745';
+            submitButton.style.color = 'white';
+            setTimeout(async () => {
+                // Identify created group (last in array)
+                const createdGroup = window.productGroups[window.productGroups.length - 1];
+                const paramInputs = document.querySelectorAll('.group-parameter-input');
+                for (const input of paramInputs) {
+                    const name = input.value.trim();
+                    if (name) {
+                        try { await pywebview.api.create_group_parameter(createdGroup.id, name); } catch (e) { console.warn('Param create failed', name, e); }
+                    }
+                }
+                closeGroupModal();
+                submitButton.textContent = 'Create Group';
+                submitButton.style.backgroundColor = '';
+                submitButton.style.color = '';
+                submitButton.disabled = false;
+                if (window.refreshInventoryData) await window.refreshInventoryData();
+            }, 500);
         }
     } catch (error) {
-        console.error('Error creating group:', error);
-        
-        // Show failure state
+        console.error('Error saving group:', error);
         submitButton.textContent = '✗ Failed';
         submitButton.style.backgroundColor = '#dc3545';
         submitButton.style.color = 'white';
-        
-        alert('Failed to create group. Please try again.');
-        
-        // Reset button after a delay
+        alert('Failed to save group: ' + (error.message || 'Unknown error'));
         setTimeout(() => {
-            submitButton.textContent = 'Create Group';
+            submitButton.textContent = window.editingGroupId ? 'Save Changes' : 'Create Group';
             submitButton.style.backgroundColor = '';
             submitButton.style.color = '';
             submitButton.disabled = false;
@@ -1494,3 +1668,74 @@ async function handleGroupSubmission(event) {
 window.openGroupModal = openGroupModal;
 window.closeGroupModal = closeGroupModal;
 window.handleGroupSubmission = handleGroupSubmission;
+
+// ===== Group Parameter Dynamic Fields =====
+
+function addGroupParameterField() {
+    const container = document.getElementById('groupParametersContainer');
+    if (!container) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'group-parameter-row';
+    wrapper.style.cssText = 'display:flex; gap:8px; align-items:center; margin-top:6px;';
+    wrapper.innerHTML = `
+        <input type="text" class="group-parameter-input" placeholder="Parameter name" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:6px;" maxlength="64" />
+        <button type="button" class="modal-button cancel" style="padding:8px 12px;" onclick="this.parentElement.remove()">Remove</button>
+    `;
+    container.appendChild(wrapper);
+}
+window.addGroupParameterField = addGroupParameterField;
+
+// ===== Product Group Parameters Handling =====
+
+async function loadSelectedGroupParameters(groupId, productId = null) {
+    const wrapper = document.getElementById('productGroupParametersWrapper');
+    const container = document.getElementById('productGroupParametersContainer');
+    if (!wrapper || !container) return;
+    container.innerHTML = '';
+    if (!groupId) {
+        wrapper.style.display = 'none';
+        return;
+    }
+    try {
+        const params = await pywebview.api.get_group_parameters(parseInt(groupId));
+        if (!params || params.length === 0) {
+            wrapper.style.display = 'none';
+            return;
+        }
+        wrapper.style.display = 'block';
+        let existingValuesMap = new Map();
+        if (productId) {
+            try {
+                const existingValues = await pywebview.api.get_product_group_parameter_values(productId);
+                existingValues.forEach(v => existingValuesMap.set(v.group_parameter_id, v.value));
+            } catch (e) {
+                console.warn('Could not load existing parameter values for product', productId, e);
+            }
+        }
+        params.forEach(param => {
+            const row = document.createElement('div');
+            row.className = 'product-group-parameter-row';
+            row.style.cssText = 'display:flex; flex-direction:column; gap:4px; margin-bottom:10px; background:#f5f5f5; padding:10px; border-radius:6px;';
+            const value = existingValuesMap.get(param.id) || '';
+            row.innerHTML = `
+                <label style="font-weight:600; color:#333;">${param.name}</label>
+                <input type="text" data-parameter-id="${param.id}" class="product-group-parameter-input" value="${value}" placeholder="Enter value..." style="padding:8px; border:1px solid #ccc; border-radius:6px;" />
+            `;
+            container.appendChild(row);
+        });
+    } catch (e) {
+        console.error('Failed to load group parameters:', e);
+        wrapper.style.display = 'none';
+    }
+}
+window.loadSelectedGroupParameters = loadSelectedGroupParameters;
+
+// Listen for group selection changes inside product modal
+document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'productGroup') {
+        const groupId = e.target.value;
+        const editingProduct = window.editingProductData ? window.editingProductData.id : null;
+        loadSelectedGroupParameters(groupId, editingProduct);
+    }
+});
+

@@ -298,7 +298,15 @@ async function performDynamicSearch(searchTerm, searchId = 0) {
         }
         
         if (!searchTerm) {
-            // Show all data if search is empty
+            // Restore group states when search is cleared BEFORE showing products
+            if (window.filterGroupsBySearch) {
+                try {
+                    window.filterGroupsBySearch('', new Set());
+                } catch (e) {
+                    console.warn('Failed to restore group states on empty search:', e);
+                }
+            }
+            // Show all data if search is empty (products + ingredients)
             await Promise.all([
                 showAllProducts(),
                 showAllIngredientsIfApplicable()
@@ -370,12 +378,22 @@ async function buildFilteredProductsTable(searchTerm, searchId = 0) {
     
     // Hide non-matching products immediately (no animation since they just appeared)
     const allRows = Array.from(tbody.querySelectorAll('tr'));
+    let visibleCount = 0;
     allRows.forEach(row => {
         const productId = parseInt(row.dataset.productId);
         if (!shouldBeVisibleIds.has(productId)) {
             row.style.display = 'none';
+        } else {
+            visibleCount++;
         }
     });
+    
+    // Show empty message if no products match
+    if (visibleCount === 0) {
+        showNoResultsMessage(tbody);
+    } else {
+        removeNoResultsMessage(tbody);
+    }
     
     // Handle ingredient filtering only if we have ingredient data
     if (ingredientFilterData && ingredientFilterData.ingredientsList) {
@@ -404,16 +422,16 @@ async function filterProductsData(searchTerm, searchId = 0) {
     if (!tbody || !window.allProductsData || !window.allProductsData.length) return;
     
     if (!searchTerm) {
+        // When search is cleared, properly restore group states via filterGroupsBySearch
+        if (window.filterGroupsBySearch) {
+            window.filterGroupsBySearch('', new Set());
+        }
+        
         // Show all products and ingredients if search is empty - run in parallel for sync
         await Promise.all([
             showAllProducts(),
             showAllIngredientsIfApplicable()
         ]);
-        
-        // Show all groups when search is cleared
-        if (window.showAllGroups) {
-            window.showAllGroups();
-        }
         return;
     }
     
@@ -532,6 +550,13 @@ async function filterProductsData(searchTerm, searchId = 0) {
             row.style.display = 'none';
         });
         
+        // Show empty message if no matching rows, otherwise remove it
+        if (matchingRows.length === 0) {
+            showNoResultsMessage(tbody);
+        } else {
+            removeNoResultsMessage(tbody);
+        }
+        
         // The matching rows will already be animated by rebuildProductsTable
         
         // Handle ingredient filtering
@@ -597,9 +622,11 @@ async function filterProductsData(searchTerm, searchId = 0) {
         }
     }
     
-    // Show empty message if no products match
+    // Show empty message if no products match, otherwise remove it
     if (matchingRows.length === 0) {
         showNoResultsMessage(tbody);
+    } else {
+        removeNoResultsMessage(tbody);
     }
 }
 
@@ -609,11 +636,44 @@ async function filterProductsData(searchTerm, searchId = 0) {
 async function showAllProducts() {
     const tbody = getProductsTableBody();
     
-    // When groups exist, handle differently
+    // When groups exist, they handle their own state restoration
+    // We just need to ensure any hidden rows from search are visible
     if (window.productGroups && window.productGroups.length > 0) {
-        // Show all groups and their products
-        if (window.showAllGroups) {
-            window.showAllGroups();
+        // Only show rows that should be visible (respecting group collapsed state)
+        // Groups have already been restored to original state by filterGroupsBySearch
+        const allGroupElements = document.querySelectorAll('.product-group');
+        allGroupElements.forEach(groupElement => {
+            const groupId = parseInt(groupElement.dataset.groupId);
+            const group = window.productGroups.find(g => g.id === groupId);
+            
+            // Show the group container
+            groupElement.style.display = '';
+            
+            // Only show rows if group is not collapsed
+            if (group && !group.isCollapsed) {
+                const groupRows = groupElement.querySelectorAll('.group-products-body tr');
+                groupRows.forEach(row => {
+                    row.style.display = '';
+                });
+            }
+            
+            // Reset group count
+            if (group) {
+                const countElement = groupElement.querySelector('.group-count');
+                if (countElement) {
+                    countElement.textContent = `(${group.productIds.length})`;
+                }
+            }
+        });
+        
+        // Show all ungrouped products
+        const ungroupedSection = document.querySelector('.ungrouped-products');
+        if (ungroupedSection) {
+            ungroupedSection.style.display = '';
+            const ungroupedRows = ungroupedSection.querySelectorAll('tbody tr');
+            ungroupedRows.forEach(row => {
+                row.style.display = '';
+            });
         }
         return;
     }
@@ -687,8 +747,8 @@ function showNoResultsMessage(tbody) {
     const noResultsRow = document.createElement('tr');
     noResultsRow.className = 'no-results-row';
     noResultsRow.innerHTML = `
-        <td colspan="7" style="text-align: center; color: #666; padding: 40px 24px;">
-            <h3 style="margin: 0 0 16px 0; font-size: 1.5em; color: #666;">No products match your search</h3>
+        <td colspan="7" style="text-align: center; color: #666; padding: 40px 24px; border-bottom: none;">
+            <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: #666; border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
             <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
         </td>
     `;
@@ -700,10 +760,9 @@ function showNoResultsMessage(tbody) {
  * @param {HTMLElement} tbody - Table body element
  */
 function removeNoResultsMessage(tbody) {
-    const existingMessage = tbody.querySelector('.no-results-row');
-    if (existingMessage) {
-        existingMessage.remove();
-    }
+    // Remove all instances of the message (in case of duplicates)
+    const existingMessages = tbody.querySelectorAll('.no-results-row');
+    existingMessages.forEach(message => message.remove());
 }
 
 /**

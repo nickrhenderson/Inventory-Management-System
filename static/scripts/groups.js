@@ -4,6 +4,12 @@
 // Cache for groups (loaded from database)
 let productGroups = [];
 
+// Storage for original group collapsed states (before search)
+let originalGroupStates = new Map();
+
+// Flag to track if search is active
+let isSearchActive = false;
+
 // Initialize groups storage
 window.productGroups = productGroups;
 
@@ -70,6 +76,9 @@ async function createGroup(groupName) {
  */
 async function deleteGroup(groupId) {
     try {
+        // Capture product IDs before deletion for cache invalidation
+        const groupObj = productGroups.find(g => g.id === groupId);
+        const productIdsToInvalidate = groupObj ? [...groupObj.productIds] : [];
         const response = await pywebview.api.delete_group(groupId);
         
         if (response.success) {
@@ -77,6 +86,8 @@ async function deleteGroup(groupId) {
             if (index !== -1) {
                 productGroups.splice(index, 1);
             }
+            // Invalidate parameter cache entries for products from this group
+            productIdsToInvalidate.forEach(pid => invalidateProductParameterCache(pid));
         } else {
             throw new Error(response.message);
         }
@@ -92,6 +103,12 @@ async function deleteGroup(groupId) {
  * @returns {Promise<void>}
  */
 async function toggleGroupCollapse(groupId) {
+    // Don't allow collapse/expand when search is active
+    if (isSearchActive) {
+        console.log('Cannot toggle group while search is active');
+        return;
+    }
+    
     const group = productGroups.find(g => g.id === groupId);
     if (group) {
         const newCollapsedState = !group.isCollapsed;
@@ -126,6 +143,8 @@ async function addProductToGroup(groupId, productId) {
             if (group && !group.productIds.includes(productId)) {
                 group.productIds.push(productId);
             }
+            // Invalidate cached parameter values (backend purged old values on reassignment)
+            invalidateProductParameterCache(productId);
             
             renderGroups(true); // Animate when adding products
         } else {
@@ -151,6 +170,8 @@ async function removeProductFromGroup(groupId, productId) {
             const group = productGroups.find(g => g.id === groupId);
             if (group) {
                 group.productIds = group.productIds.filter(id => id !== productId);
+                // Invalidate cached parameter values (backend purged values on removal)
+                invalidateProductParameterCache(productId);
                 renderGroups(true); // Animate when removing products
             }
         } else {
@@ -255,28 +276,38 @@ function initializeGroupsSystem() {
 }
 
 /**
- * Animate all product rows in groups
+ * Animate all product rows in groups using Intersection Observer
+ * Only animates rows that are visible in the viewport
  */
 function animateGroupProductRows() {
     // Get all product rows from groups and ungrouped section
     const allRows = document.querySelectorAll('.product-group tbody tr, .ungrouped-products tbody tr');
     
-    allRows.forEach((row, index) => {
-        setTimeout(() => {
-            if (window.animateProductRowIn) {
-                window.animateProductRowIn(row);
-            } else {
-                // Fallback animation if animateProductRowIn is not available
-                row.getBoundingClientRect();
-                row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
-                row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
-                
-                setTimeout(() => {
-                    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
-                }, INVENTORY_CONFIG.ANIMATION.ANIMATION_DURATION);
-            }
-        }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
-    });
+    // Use the global product row observer if available
+    if (window.initProductRowObserver) {
+        const observer = window.initProductRowObserver();
+        allRows.forEach(row => {
+            observer.observe(row);
+        });
+    } else {
+        // Fallback to sequential animation if observer not available
+        allRows.forEach((row, index) => {
+            setTimeout(() => {
+                if (window.animateProductRowIn) {
+                    window.animateProductRowIn(row);
+                } else {
+                    // Fallback animation if animateProductRowIn is not available
+                    row.getBoundingClientRect();
+                    row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
+                    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+                    
+                    setTimeout(() => {
+                        row.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_ANIMATE_IN);
+                    }, INVENTORY_CONFIG.ANIMATION.ANIMATION_DURATION);
+                }
+            }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
+        });
+    }
 }
 
 // Make function globally accessible
@@ -304,11 +335,14 @@ function createGroupElement(group, animate = true) {
         }
     };
     
+    // Add visual indicator if search is active (disable collapse button)
+    const collapseDisabled = isSearchActive ? 'style="opacity: 0.5; cursor: not-allowed;"' : '';
+    
     groupHeader.innerHTML = `
         <div class="group-drag-handle" title="Drag to reorder">
             <div class="drag-dots"></div>
         </div>
-        <button class="group-collapse-btn">
+        <button class="group-collapse-btn" ${collapseDisabled}>
             <svg class="group-arrow ${group.isCollapsed ? 'collapsed' : ''}" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -316,6 +350,9 @@ function createGroupElement(group, animate = true) {
         <span class="group-name">${escapeHtml(group.name)}</span>
         <span class="group-count">(${group.productIds.length})</span>
         <div class="group-actions">
+            <button class="group-action-btn" onclick="event.stopPropagation(); openEditGroupModal(${group.id})" title="Edit Group">
+                <img src="static/img/svg/edit.svg" alt="Edit" />
+            </button>
             <button class="group-action-btn" onclick="event.stopPropagation(); confirmDeleteGroup(${group.id}, '${escapeHtml(group.name)}')" title="Delete Group">
                 <img src="static/img/svg/trash.svg" alt="Delete" />
             </button>
@@ -457,6 +494,11 @@ function createProductRowSync(product, index, animate = true) {
     
     // Add click handler for row selection
     row.addEventListener('click', () => selectProduct(product.id));
+
+    // Tooltip hover listeners
+    row.addEventListener('mouseenter', handleProductRowMouseEnter);
+    row.addEventListener('mousemove', handleProductRowMouseMove);
+    row.addEventListener('mouseleave', handleProductRowMouseLeave);
     
     return row;
 }
@@ -521,9 +563,14 @@ function confirmDeleteGroup(groupId, groupName) {
         `Are you sure you want to delete the group "${groupName}"? Products in this group will become ungrouped.`,
         'Delete Group',
         true,
-        () => {
-            deleteGroup(groupId);
-            renderGroups();
+        async () => {
+            await deleteGroup(groupId);
+            // Use unified refresh function to reload data with search persistence
+            if (window.refreshInventoryData) {
+                await window.refreshInventoryData();
+            } else {
+                renderGroups();
+            }
         }
     );
 }
@@ -905,14 +952,47 @@ function reorderGroups(draggedId, targetId) {
  * @param {Set} visibleProductIds - Set of product IDs that match the search
  */
 function filterGroupsBySearch(searchTerm, visibleProductIds) {
-    if (!searchTerm || !visibleProductIds || visibleProductIds.size === 0) {
-        // Show all groups when no search
-        showAllGroups();
+    // If there are no groups at all, defer empty-state messaging to standard products table logic
+    // This prevents duplicate "No products match" messages (one from groups system and one from search.js)
+    if (!productGroups || productGroups.length === 0) {
+        return; // Nothing to do in group filtering when no groups exist
+    }
+    // Only restore states if search is actually cleared (empty string)
+    // Don't restore if search term exists but just has no matches
+    if (!searchTerm) {
+        // Restore original group states when search is cleared
+        restoreOriginalGroupStates();
         return;
     }
     
+    // Save original states if this is the start of a new search
+    if (!isSearchActive) {
+        saveOriginalGroupStates();
+        isSearchActive = true;
+    }
+    
+    // Handle case where search has no matches
+    if (!visibleProductIds || visibleProductIds.size === 0) {
+        // Hide all groups and ungrouped section
+        const allGroupElements = document.querySelectorAll('.product-group');
+        allGroupElements.forEach(el => el.style.display = 'none');
+        
+        const ungroupedSection = document.querySelector('.ungrouped-products');
+        if (ungroupedSection) {
+            ungroupedSection.style.display = 'none';
+        }
+        
+        // Show "no products match" message
+        showNoProductsMessage();
+        return;
+    }
+    
+    // Remove any existing "no products" message
+    removeNoProductsMessage();
+    
     const allGroupElements = document.querySelectorAll('.product-group');
     let anyGroupVisible = false;
+    let totalVisibleProducts = 0;
     
     allGroupElements.forEach(groupElement => {
         const groupId = parseInt(groupElement.dataset.groupId);
@@ -931,8 +1011,9 @@ function filterGroupsBySearch(searchTerm, visibleProductIds) {
             groupElement.style.display = '';
             anyGroupVisible = true;
             
-            // Ensure the group is not collapsed so users can see the matching products
+            // Force expand the group during search so users can see the matching products
             if (group.isCollapsed) {
+                // Temporarily expand without saving to database (we'll restore later)
                 group.isCollapsed = false;
                 // Re-render this specific group to show products
                 const newGroupElement = createGroupElement(group, false);
@@ -964,6 +1045,8 @@ function filterGroupsBySearch(searchTerm, visibleProductIds) {
             if (countElement) {
                 countElement.textContent = `(${visibleInGroup})`;
             }
+            
+            totalVisibleProducts += visibleInGroup;
         } else {
             // Hide the entire group if no products match
             groupElement.style.display = 'none';
@@ -992,6 +1075,15 @@ function filterGroupsBySearch(searchTerm, visibleProductIds) {
         } else {
             ungroupedSection.style.display = '';
         }
+        
+        totalVisibleProducts += visibleUngrouped;
+    }
+    
+    // Show "no products match" message if no products are visible
+    if (totalVisibleProducts === 0) {
+        showNoProductsMessage();
+    } else {
+        removeNoProductsMessage();
     }
 }
 
@@ -1032,7 +1124,246 @@ function showAllGroups() {
     }
 }
 
+/**
+ * Show "no products match" message in the inventory container
+ */
+function showNoProductsMessage() {
+    removeNoProductsMessage();
+    
+    const container = document.getElementById('inventoryTable');
+    if (!container) return;
+    
+    const message = document.createElement('div');
+    message.className = 'no-products-message';
+    message.style.cssText = 'text-align: center; color: #666; padding: 40px 24px;';
+    message.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: #666; border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
+        <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+    `;
+    container.appendChild(message);
+}
+
+/**
+ * Remove "no products match" message
+ */
+function removeNoProductsMessage() {
+    // Remove all instances of the message (in case of duplicates)
+    const messages = document.querySelectorAll('.no-products-message');
+    messages.forEach(message => message.remove());
+}
+
+/**
+ * Save the current collapsed state of all groups before applying search
+ */
+function saveOriginalGroupStates() {
+    originalGroupStates.clear();
+    productGroups.forEach(group => {
+        originalGroupStates.set(group.id, group.isCollapsed);
+    });
+    console.log('Saved original group states:', Array.from(originalGroupStates.entries()));
+}
+
+/**
+ * Restore groups to their original collapsed/expanded states
+ */
+function restoreOriginalGroupStates() {
+    console.log('Restoring original group states...');
+    
+    // IMPORTANT: Set search inactive BEFORE any other operations
+    isSearchActive = false;
+    
+    // Remove any "no products" message
+    removeNoProductsMessage();
+    
+    // If no saved states, just show all groups normally
+    if (originalGroupStates.size === 0) {
+        console.log('No saved states found, showing all groups normally');
+        showAllGroups();
+        // Clean any residual disabled styles on collapse buttons
+        document.querySelectorAll('.group-collapse-btn[style]')
+            .forEach(btn => btn.removeAttribute('style'));
+        return;
+    }
+    
+    // Restore each group's original collapsed state
+    productGroups.forEach(group => {
+        if (originalGroupStates.has(group.id)) {
+            const originalState = originalGroupStates.get(group.id);
+            console.log(`Restoring group ${group.id} to collapsed=${originalState}`);
+            group.isCollapsed = originalState;
+        }
+    });
+    
+    // Clear the saved states
+    originalGroupStates.clear();
+    
+    // Re-render groups to apply the restored states
+    // This will create the correct DOM structure with proper collapsed/expanded groups
+    renderGroups(false);
+    // After re-render, ensure collapse buttons are enabled (remove inline style if any)
+    document.querySelectorAll('.group-collapse-btn[style]')
+        .forEach(btn => btn.removeAttribute('style'));
+}
+
 // Make functions globally accessible
 window.loadGroupsFromDatabase = loadGroupsFromDatabase;
 window.filterGroupsBySearch = filterGroupsBySearch;
 window.showAllGroups = showAllGroups;
+
+// ===== Product Parameter Tooltip Implementation =====
+let productParameterTooltipEl = null;
+let productParameterCache = new Map(); // productId -> {groupId, values: [{name,value}]}
+let tooltipShowTimer = null;
+const TOOLTIP_DELAY_MS = 300;
+// Exclude interactive controls so tooltip doesn't show on buttons/inputs
+const EXCLUDED_TOOLTIP_SELECTORS = [
+    '.amount-controls',
+    '.product-actions',
+    '.amount-input',
+    '.product-edit-button',
+    '.product-delete-button',
+    '.amount-button',
+    '.group-action-btn',
+    'button',
+    'input'
+];
+let currentTooltipProductId = null; // Track which product's tooltip is currently shown
+let lastTooltipMouseEvent = null; // Track latest mouse position for accurate placement
+let tooltipAnchor = null; // { dx, dy } captured at initial show to avoid jump
+
+function ensureTooltipElement() {
+    if (!productParameterTooltipEl) {
+        productParameterTooltipEl = document.createElement('div');
+        productParameterTooltipEl.className = 'product-parameter-tooltip';
+        document.body.appendChild(productParameterTooltipEl);
+    }
+    return productParameterTooltipEl;
+}
+
+function handleProductRowMouseEnter(e) {
+    const row = e.currentTarget;
+    const productId = parseInt(row.dataset.productId);
+    if (!productId) return;
+    lastTooltipMouseEvent = e;
+    clearTimeout(tooltipShowTimer);
+    tooltipShowTimer = setTimeout(async () => {
+        const ev = lastTooltipMouseEvent || e;
+        await maybeShowProductParameterTooltip(row, productId, ev);
+    }, TOOLTIP_DELAY_MS);
+}
+
+function handleProductRowMouseMove(e) {
+    lastTooltipMouseEvent = e;
+    if (!productParameterTooltipEl || !productParameterTooltipEl.classList.contains('visible')) return;
+    if (shouldSuppressTooltip(e)) {
+        hideProductParameterTooltip();
+        return;
+    }
+    positionTooltip(e.clientX, e.clientY);
+}
+
+function handleProductRowMouseLeave() {
+    clearTimeout(tooltipShowTimer);
+    hideProductParameterTooltip();
+}
+
+function shouldSuppressTooltip(event) {
+    return EXCLUDED_TOOLTIP_SELECTORS.some(sel => event.target.closest(sel));
+}
+
+function shouldSuppressTooltipAtPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return false;
+    return EXCLUDED_TOOLTIP_SELECTORS.some(sel => el.closest(sel));
+}
+
+async function maybeShowProductParameterTooltip(row, productId, event) {
+    // Re-evaluate suppression at the current pointer location
+    if (shouldSuppressTooltip(event) || shouldSuppressTooltipAtPoint(event.clientX, event.clientY)) return;
+    const cacheEntry = await getProductParameterData(productId);
+    if (!cacheEntry || !cacheEntry.values || cacheEntry.values.length === 0) return;
+    const tooltip = ensureTooltipElement();
+    tooltip.innerHTML = buildTooltipHTML(cacheEntry.values);
+    tooltip.classList.add('visible');
+    const pos = computeInitialTooltipPosition(event.clientX, event.clientY);
+    tooltip.style.left = pos.left + 'px';
+    tooltip.style.top = pos.top + 'px';
+    tooltipAnchor = { dx: pos.left - event.clientX, dy: pos.top - event.clientY };
+    currentTooltipProductId = productId;
+}
+
+function computeInitialTooltipPosition(x, y) {
+    const tooltip = ensureTooltipElement();
+    const offset = 14;
+    let left = x + offset;
+    let top = y + offset;
+    const rect = tooltip.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (left + rect.width + 16 > vw) left = x - rect.width - offset;
+    if (top + rect.height + 16 > vh) top = y - rect.height - offset;
+    return { left, top };
+}
+
+function positionTooltip(x, y) {
+    const tooltip = ensureTooltipElement();
+    if (tooltipAnchor) {
+        tooltip.style.left = (x + tooltipAnchor.dx) + 'px';
+        tooltip.style.top = (y + tooltipAnchor.dy) + 'px';
+        return;
+    }
+    const pos = computeInitialTooltipPosition(x, y);
+    tooltip.style.left = pos.left + 'px';
+    tooltip.style.top = pos.top + 'px';
+}
+
+function hideProductParameterTooltip() {
+    if (productParameterTooltipEl) productParameterTooltipEl.classList.remove('visible');
+    currentTooltipProductId = null;
+    tooltipAnchor = null;
+}
+
+async function getProductParameterData(productId) {
+    if (productParameterCache.has(productId)) return productParameterCache.get(productId);
+    const group = productGroups.find(g => g.productIds.includes(productId));
+    if (!group) return null;
+    try {
+        const values = await pywebview.api.get_product_group_parameter_values(productId);
+        if (!Array.isArray(values) || values.length === 0) {
+            const params = await pywebview.api.get_group_parameters(group.id);
+            if (!params || params.length === 0) return null; // group has no parameters
+        }
+        const normalized = (values || []).map(v => ({ name: v.parameter_name, value: v.value || '' }));
+        const entry = { groupId: group.id, values: normalized };
+        productParameterCache.set(productId, entry);
+        return entry;
+    } catch (err) {
+        console.warn('Failed to fetch parameter values for product', productId, err);
+        return null;
+    }
+}
+
+function buildTooltipHTML(values) {
+    if (!values || values.length === 0) return '';
+    let rows = '';
+    values.forEach(v => {
+        rows += `<tr><td class="param-name">${escapeHtml(v.name)}</td><td class="param-value">${escapeHtml(v.value || '-')}</td></tr>`;
+    });
+    return `<h4><span class="param-title-icon"><img src="static/img/svg/info.svg" alt="Info" /></span>Custom Fields</h4><table>${rows}</table>`;
+}
+
+// Invalidate cached parameter data for a product and hide tooltip if it's showing
+function invalidateProductParameterCache(productId) {
+    if (productParameterCache.has(productId)) {
+        productParameterCache.delete(productId);
+    }
+    if (currentTooltipProductId === productId) {
+        hideProductParameterTooltip();
+    }
+}
+
+window.invalidateProductParameterCache = invalidateProductParameterCache;
+
+['scroll', 'resize'].forEach(evt => window.addEventListener(evt, hideProductParameterTooltip, { passive: true }));
+
+window._productParameterCache = productParameterCache;

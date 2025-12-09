@@ -57,6 +57,72 @@
     --font-size-13px: 13px;
     --font-size-14px: 14px;
     --font-size-18px: 18px;
+    .product-parameter-tooltip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 5000;
+        background: var(--bg-white);
+        border: 1px solid var(--border-light-gray);
+        box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: var(--font-size-13px);
+        color: var(--text-primary);
+        max-width: 320px;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity .15s ease, transform .15s ease;
+        backdrop-filter: blur(4px);
+    }
+    .product-parameter-tooltip.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .product-parameter-tooltip h4 {
+        margin: 0 0 8px 0;
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        color: var(--loading-accent);
+        border-bottom: 2px solid var(--loading-accent);
+        padding-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .product-parameter-tooltip .param-title-icon img {
+        width: 14px;
+        height: 14px;
+        display: block;
+        filter: opacity(.85);
+        transition: filter .2s ease;
+    }
+    .product-parameter-tooltip.visible .param-title-icon img {
+        filter: opacity(1);
+    }
+    .product-parameter-tooltip table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .product-parameter-tooltip td {
+        padding: 4px 6px;
+        border-bottom: 1px solid #eee;
+        vertical-align: top;
+        font-size: var(--font-size-13px);
+    }
+    .product-parameter-tooltip tr:last-child td {
+        border-bottom: none;
+    }
+    .product-parameter-tooltip td.param-name {
+        font-weight: 600;
+        color: var(--text-gray);
+        width: 35%;
+    }
+    .product-parameter-tooltip td.param-value {
+        color: var(--text-primary);
+        word-break: break-word;
+    }
 
     /* Border Radius */
     --border-radius-sm: 4px;
@@ -1124,6 +1190,7 @@ body {
 
 .ingredient-option input[type="checkbox"] {
     margin-right: 12px;
+    accent-color: var(--loading-accent);
 }
 
 .selected-ingredients {

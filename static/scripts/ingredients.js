@@ -1,5 +1,49 @@
 // Ingredient management functionality for the inventory system
 
+// Intersection Observer for viewport-based animations
+let ingredientItemObserver = null;
+
+/**
+ * Initialize Intersection Observer for ingredient item animations
+ */
+function initIngredientItemObserver() {
+    if (ingredientItemObserver) {
+        ingredientItemObserver.disconnect();
+    }
+    
+    const observerOptions = {
+        root: document.getElementById('rightBoxContent'), // Observe within the right panel
+        rootMargin: '50px', // Start animating 50px before entering viewport
+        threshold: 0.01 // Trigger when even 1% is visible
+    };
+    
+    ingredientItemObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const item = entry.target;
+                // Only animate if it hasn't been animated yet
+                if (item.classList.contains(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN)) {
+                    animateIngredientItemIn(item);
+                }
+                // Stop observing once animated
+                ingredientItemObserver.unobserve(item);
+            }
+        });
+    }, observerOptions);
+    
+    return ingredientItemObserver;
+}
+
+/**
+ * Cleanup ingredient item observer
+ */
+function cleanupIngredientItemObserver() {
+    if (ingredientItemObserver) {
+        ingredientItemObserver.disconnect();
+        ingredientItemObserver = null;
+    }
+}
+
 /**
  * Display ingredients details in the right panel
  * @param {Array} ingredients - Array of ingredient data
@@ -238,21 +282,26 @@ async function waitForLoadingScreenThenShow(skipAnimation = false) {
 }
 
 /**
- * Animate ingredients in with staggered timing (using same system as product rows)
+ * Animate ingredients in using Intersection Observer for viewport-based animations
+ * Only animates items that are visible in the viewport
  */
 function animateIngredientsIn(skipAnimation = false) {
     const ingredientItems = document.querySelectorAll('.ingredient-item.all-ingredient');
     
-    ingredientItems.forEach((item, index) => {
-        if (skipAnimation) {
-            // Skip animation - just show immediately
+    if (skipAnimation) {
+        // Skip animation - just show immediately
+        ingredientItems.forEach(item => {
             item.classList.remove(INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN);
-        } else {
-            setTimeout(() => {
-                animateIngredientItemIn(item);
-            }, index * INVENTORY_CONFIG.ANIMATION.ROW_DELAY);
-        }
-    });
+        });
+    } else {
+        // Initialize observer
+        const observer = initIngredientItemObserver();
+        
+        // Observe all items
+        ingredientItems.forEach(item => {
+            observer.observe(item);
+        });
+    }
 }
 
 /**

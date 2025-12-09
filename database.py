@@ -24,6 +24,69 @@ class DatabaseManager:
 		self.app_version = app_version
 		self.db_path = os.path.join(get_data_path(), "inventory.db")
 		self.barcode_manager = BarcodeManager()
+		
+		# Define expected schema for all tables
+		self.expected_schema = {
+			'ingredients': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('barcode_id', 'TEXT UNIQUE NOT NULL'),
+				('name', 'TEXT NOT NULL'),
+				('unit_cost', 'REAL DEFAULT 0.0'),
+				('purchase_date', 'DATE'),
+				('expiration_date', 'DATE'),
+				('supplier', 'TEXT'),
+				('is_flagged', 'INTEGER DEFAULT 0'),
+				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
+			'products': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('barcode_id', 'TEXT UNIQUE NOT NULL'),
+				('product_name', 'TEXT NOT NULL'),
+				('batch_number', 'TEXT'),
+				('date_mixed', 'DATE NOT NULL'),
+				('total_quantity', 'REAL DEFAULT 0.0'),
+				('total_cost', 'REAL DEFAULT 0.0'),
+				('amount', 'INTEGER DEFAULT 0'),
+				('notes', 'TEXT'),
+				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
+			'product_ingredients': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('product_id', 'INTEGER NOT NULL'),
+				('ingredient_id', 'INTEGER NOT NULL'),
+				('quantity_used', 'REAL NOT NULL'),
+				('cost_per_unit', 'REAL DEFAULT 0.0')
+			],
+			'groups': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('name', 'TEXT NOT NULL'),
+				('display_order', 'INTEGER DEFAULT 0'),
+				('is_collapsed', 'INTEGER DEFAULT 0'),
+				('created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP'),
+				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
+			'group_products': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('group_id', 'INTEGER NOT NULL'),
+				('product_id', 'INTEGER NOT NULL')
+			]
+			,
+			'group_parameters': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('group_id', 'INTEGER NOT NULL'),
+				('name', 'TEXT NOT NULL'),
+				('display_order', 'INTEGER DEFAULT 0'),
+				('created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
+			'product_group_parameter_values': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('product_id', 'INTEGER NOT NULL'),
+				('group_parameter_id', 'INTEGER NOT NULL'),
+				('value', 'TEXT'),
+				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			]
+		}
+		
 		self.init_database()
 
 	def _get_db_connection(self):
@@ -88,201 +151,161 @@ class DatabaseManager:
 		
 		db_path = os.path.join(data_dir, "inventory.db")
 		
-		# Initialize database and create tables
+		# Initialize database and create/migrate tables dynamically
 		with sqlite3.connect(db_path) as conn:
-			# Drop old inventory table if it exists
+			# Drop old inventory table if it exists (legacy)
 			conn.execute('DROP TABLE IF EXISTS inventory')
 			
-			# Check if we need to migrate the ingredients table
-			cursor = conn.execute("PRAGMA table_info(ingredients)")
-			columns = [column[1] for column in cursor.fetchall()]
-			
-			# If the table has unit or category columns, we need to migrate
-			if 'unit' in columns or 'category' in columns:
-				self._migrate_ingredients_table(conn)
-			else:
-				# Create new ingredients table without unit and category
-				conn.execute('''
-					CREATE TABLE IF NOT EXISTS ingredients (
-						id INTEGER PRIMARY KEY AUTOINCREMENT,
-						barcode_id TEXT UNIQUE NOT NULL,
-						name TEXT NOT NULL,
-						unit_cost REAL DEFAULT 0.0,
-						purchase_date DATE,
-						expiration_date DATE,
-						supplier TEXT,
-						is_flagged INTEGER DEFAULT 0,
-						last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-					)
-				''')
-			
-			# Add is_flagged column to existing ingredients table if it doesn't exist
-			try:
-				conn.execute('ALTER TABLE ingredients ADD COLUMN is_flagged INTEGER DEFAULT 0')
-			except sqlite3.OperationalError:
-				# Column already exists
-				pass
-			
-			# Add last_updated column to existing ingredients table if it doesn't exist
-			try:
-				conn.execute('ALTER TABLE ingredients ADD COLUMN last_updated DATETIME')
-				# Set default timestamp for existing rows
-				conn.execute("UPDATE ingredients SET last_updated = CURRENT_TIMESTAMP WHERE last_updated IS NULL")
-				print("Added 'last_updated' column to ingredients table")
-			except sqlite3.OperationalError:
-				# Column already exists
-				pass
-			
-			# Create products table
-			conn.execute('''
-				CREATE TABLE IF NOT EXISTS products (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					barcode_id TEXT UNIQUE NOT NULL,
-					product_name TEXT NOT NULL,
-					batch_number TEXT,
-					date_mixed DATE NOT NULL,
-					total_quantity REAL DEFAULT 0.0,
-					total_cost REAL DEFAULT 0.0,
-					amount INTEGER DEFAULT 0,
-					notes TEXT,
-					last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-				)
-			''')
-			
-			# Add amount column to existing products table if it doesn't exist
-			try:
-				conn.execute('ALTER TABLE products ADD COLUMN amount INTEGER DEFAULT 0')
-				print("Added 'amount' column to products table")
-			except sqlite3.OperationalError:
-				# Column already exists
-				pass
-			
-			# Add last_updated column to existing products table if it doesn't exist
-			try:
-				conn.execute('ALTER TABLE products ADD COLUMN last_updated DATETIME')
-				# Set default timestamp for existing rows
-				conn.execute("UPDATE products SET last_updated = CURRENT_TIMESTAMP WHERE last_updated IS NULL")
-				print("Added 'last_updated' column to products table")
-			except sqlite3.OperationalError:
-				# Column already exists
-				pass
-			
-			# Create product_ingredients junction table (many-to-many relationship)
-			conn.execute('''
-				CREATE TABLE IF NOT EXISTS product_ingredients (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					product_id INTEGER NOT NULL,
-					ingredient_id INTEGER NOT NULL,
-					quantity_used REAL NOT NULL,
-					cost_per_unit REAL DEFAULT 0.0,
-					FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
-					FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE,
-					UNIQUE(product_id, ingredient_id)
-				)
-			''')
-			
-			# Create groups table for organizing products
-			conn.execute('''
-				CREATE TABLE IF NOT EXISTS groups (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					name TEXT NOT NULL,
-					display_order INTEGER DEFAULT 0,
-					is_collapsed INTEGER DEFAULT 0,
-					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-					last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-				)
-			''')
-			
-			# Create group_products junction table for product-group relationships
-			conn.execute('''
-				CREATE TABLE IF NOT EXISTS group_products (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					group_id INTEGER NOT NULL,
-					product_id INTEGER NOT NULL,
-					FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-					FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
-					UNIQUE(product_id)
-				)
-			''')
+			# Migrate all tables to match expected schema
+			for table_name, expected_columns in self.expected_schema.items():
+				self._migrate_table_schema(conn, table_name, expected_columns)
 			
 			# Create indexes for better performance
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_ingredients_barcode ON ingredients(barcode_id)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode_id)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_products_date_mixed ON products(date_mixed)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_product ON product_ingredients(product_id)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_groups_order ON groups(display_order)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_group_products_group ON group_products(group_id)')
-			conn.execute('CREATE INDEX IF NOT EXISTS idx_group_products_product ON group_products(product_id)')
+			self._create_indexes(conn)
 			
 			conn.commit()
 		
 		return db_path
 	
-	def _migrate_ingredients_table(self, conn):
-		"""Migrate ingredients table to remove unit and category columns"""
-		print("Migrating ingredients table to remove unit and category columns...")
+	def _migrate_table_schema(self, conn, table_name, expected_columns):
+		"""
+		Dynamically migrate a table to match the expected schema.
+		Adds missing columns and removes columns not in the schema.
+		"""
+		# Check if table exists
+		cursor = conn.execute(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+			(table_name,)
+		)
+		table_exists = cursor.fetchone() is not None
 		
-		# Create new table without unit and category columns
-		conn.execute('''
-			CREATE TABLE ingredients_new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				barcode_id TEXT UNIQUE NOT NULL,
-				name TEXT NOT NULL,
-				unit_cost REAL DEFAULT 0.0,
-				purchase_date DATE,
-				expiration_date DATE,
-				supplier TEXT,
-				is_flagged INTEGER DEFAULT 0,
-				last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-			)
-		''')
+		if not table_exists:
+			# Create table from scratch
+			print(f"Creating new table: {table_name}")
+			self._create_table(conn, table_name, expected_columns)
+			return
 		
-		# Copy data from old table to new table (excluding unit and category)
-		# Use COALESCE to handle missing last_updated column in old databases
-		conn.execute('''
-			INSERT INTO ingredients_new (id, barcode_id, name, unit_cost, purchase_date, expiration_date, supplier, is_flagged, last_updated)
-			SELECT id, barcode_id, name, unit_cost, purchase_date, expiration_date, supplier, 
-			       COALESCE(is_flagged, 0), 
-			       COALESCE(last_updated, CURRENT_TIMESTAMP)
-			FROM ingredients
-		''')
+		# Get current columns
+		cursor = conn.execute(f"PRAGMA table_info({table_name})")
+		current_columns = {row[1]: row[2] for row in cursor.fetchall()}  # {name: type}
+		
+		expected_column_names = {col[0] for col in expected_columns}
+		current_column_names = set(current_columns.keys())
+		
+		# Find columns to add and remove
+		columns_to_add = expected_column_names - current_column_names
+		columns_to_remove = current_column_names - expected_column_names
+		
+		if not columns_to_add and not columns_to_remove:
+			# Schema matches, no migration needed
+			return
+		
+		print(f"Migrating table: {table_name}")
+		if columns_to_add:
+			print(f"  Adding columns: {', '.join(columns_to_add)}")
+		if columns_to_remove:
+			print(f"  Removing columns: {', '.join(columns_to_remove)}")
+		
+		# SQLite doesn't support DROP COLUMN directly until 3.35.0
+		# We need to recreate the table
+		self._recreate_table(conn, table_name, expected_columns, current_columns)
+	
+	def _create_table(self, conn, table_name, columns):
+		"""Create a new table with the specified columns"""
+		column_defs = [f"{col[0]} {col[1]}" for col in columns]
+		
+		# Add foreign key constraints for specific tables
+		constraints = []
+		if table_name == 'product_ingredients':
+			constraints.append('FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE')
+			constraints.append('FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE')
+			constraints.append('UNIQUE(product_id, ingredient_id)')
+		elif table_name == 'group_products':
+			constraints.append('FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE')
+			constraints.append('FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE')
+			constraints.append('UNIQUE(product_id)')
+		elif table_name == 'group_parameters':
+			constraints.append('FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE')
+			constraints.append('UNIQUE(group_id, name)')
+		elif table_name == 'product_group_parameter_values':
+			constraints.append('FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE')
+			constraints.append('FOREIGN KEY (group_parameter_id) REFERENCES group_parameters (id) ON DELETE CASCADE')
+			constraints.append('UNIQUE(product_id, group_parameter_id)')
+		
+		all_defs = column_defs + constraints
+		create_sql = f"CREATE TABLE {table_name} ({', '.join(all_defs)})"
+		conn.execute(create_sql)
+	
+	def _recreate_table(self, conn, table_name, expected_columns, current_columns):
+		"""
+		Recreate a table with the expected schema.
+		Preserves data for columns that exist in both old and new schema.
+		"""
+		# Create temporary table with new schema
+		temp_table_name = f"{table_name}_new"
+		self._create_table(conn, temp_table_name, expected_columns)
+		
+		# Find columns that exist in both schemas
+		expected_column_names = {col[0] for col in expected_columns}
+		current_column_names = set(current_columns.keys())
+		common_columns = expected_column_names & current_column_names
+		
+		if common_columns:
+			# Copy data from old table to new table (only common columns)
+			common_cols_str = ', '.join(common_columns)
+			copy_sql = f"""
+				INSERT INTO {temp_table_name} ({common_cols_str})
+				SELECT {common_cols_str}
+				FROM {table_name}
+			"""
+			try:
+				conn.execute(copy_sql)
+			except sqlite3.Error as e:
+				print(f"  Warning: Could not copy all data from {table_name}: {e}")
+				print(f"  Attempting to copy row by row...")
+				# Try copying row by row to handle type mismatches
+				self._copy_data_safe(conn, table_name, temp_table_name, common_columns)
 		
 		# Drop old table and rename new table
-		conn.execute('DROP TABLE ingredients')
-		conn.execute('ALTER TABLE ingredients_new RENAME TO ingredients')
+		conn.execute(f"DROP TABLE {table_name}")
+		conn.execute(f"ALTER TABLE {temp_table_name} RENAME TO {table_name}")
+	
+	def _copy_data_safe(self, conn, old_table, new_table, common_columns):
+		"""Safely copy data row by row, handling type conversions"""
+		common_cols_str = ', '.join(common_columns)
+		placeholders = ', '.join(['?' for _ in common_columns])
 		
-		# Also update product_ingredients table to remove unit column if it exists
-		cursor = conn.execute("PRAGMA table_info(product_ingredients)")
-		pi_columns = [column[1] for column in cursor.fetchall()]
+		cursor = conn.execute(f"SELECT {common_cols_str} FROM {old_table}")
+		insert_sql = f"INSERT INTO {new_table} ({common_cols_str}) VALUES ({placeholders})"
 		
-		if 'unit' in pi_columns:
-			# Create new product_ingredients table without unit column
-			conn.execute('''
-				CREATE TABLE product_ingredients_new (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					product_id INTEGER NOT NULL,
-					ingredient_id INTEGER NOT NULL,
-					quantity_used REAL NOT NULL,
-					cost_per_unit REAL DEFAULT 0.0,
-					FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
-					FOREIGN KEY (ingredient_id) REFERENCES ingredients (id) ON DELETE CASCADE,
-					UNIQUE(product_id, ingredient_id)
-				)
-			''')
-			
-			# Copy data from old table to new table (excluding unit)
-			conn.execute('''
-				INSERT INTO product_ingredients_new (id, product_id, ingredient_id, quantity_used, cost_per_unit)
-				SELECT id, product_id, ingredient_id, quantity_used, cost_per_unit
-				FROM product_ingredients
-			''')
-			
-			# Drop old table and rename new table
-			conn.execute('DROP TABLE product_ingredients')
-			conn.execute('ALTER TABLE product_ingredients_new RENAME TO product_ingredients')
+		for row in cursor:
+			try:
+				conn.execute(insert_sql, row)
+			except sqlite3.Error as e:
+				print(f"    Skipping row due to error: {e}")
+				continue
+	
+	def _create_indexes(self, conn):
+		"""Create indexes for better performance"""
+		indexes = [
+			'CREATE INDEX IF NOT EXISTS idx_ingredients_barcode ON ingredients(barcode_id)',
+			'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode_id)',
+			'CREATE INDEX IF NOT EXISTS idx_products_date_mixed ON products(date_mixed)',
+			'CREATE INDEX IF NOT EXISTS idx_product_ingredients_product ON product_ingredients(product_id)',
+			'CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)',
+			'CREATE INDEX IF NOT EXISTS idx_groups_order ON groups(display_order)',
+			'CREATE INDEX IF NOT EXISTS idx_group_products_group ON group_products(group_id)',
+			'CREATE INDEX IF NOT EXISTS idx_group_products_product ON group_products(product_id)',
+			'CREATE INDEX IF NOT EXISTS idx_group_parameters_group ON group_parameters(group_id)',
+			'CREATE INDEX IF NOT EXISTS idx_product_param_values_product ON product_group_parameter_values(product_id)',
+			'CREATE INDEX IF NOT EXISTS idx_product_param_values_parameter ON product_group_parameter_values(group_parameter_id)'
+		]
 		
-		print("Migration completed successfully!")
+		for index_sql in indexes:
+			try:
+				conn.execute(index_sql)
+			except sqlite3.OperationalError as e:
+				print(f"Index creation failed for: {index_sql} -> {e}")
 	
 	def get_products_data(self):
 		"""Get all products ordered by date_mixed (newest first)"""
@@ -879,13 +902,54 @@ class DatabaseManager:
 				return self._success_response("Group collapsed state updated successfully")
 		except Exception as e:
 			return self._error_response(e)
+
+	def update_group_name(self, group_id, new_name):
+		"""Rename a group"""
+		try:
+			with self._get_db_connection() as conn:
+				# Verify group exists
+				existing = conn.execute('SELECT id FROM groups WHERE id = ?', (group_id,)).fetchone()
+				if not existing:
+					return self._error_response("Group not found")
+				conn.execute('''
+					UPDATE groups
+					SET name = ?, last_updated = CURRENT_TIMESTAMP
+					WHERE id = ?
+				''', (new_name.strip(), group_id))
+				conn.commit()
+				return self._success_response("Group name updated")
+		except Exception as e:
+			return self._error_response(e)
+
+	def update_group_parameter(self, parameter_id, new_name):
+		"""Rename a group parameter"""
+		try:
+			with self._get_db_connection() as conn:
+				# Verify parameter exists
+				param = conn.execute('SELECT id, group_id FROM group_parameters WHERE id = ?', (parameter_id,)).fetchone()
+				if not param:
+					return self._error_response("Group parameter not found")
+				# Attempt update (will raise constraint error if duplicate)
+				conn.execute('''
+					UPDATE group_parameters
+					SET name = ?
+					WHERE id = ?
+				''', (new_name.strip(), parameter_id))
+				conn.commit()
+				return self._success_response("Group parameter updated")
+		except sqlite3.IntegrityError:
+			return self._error_response("A parameter with that name already exists in this group")
+		except Exception as e:
+			return self._error_response(e)
 	
 	def add_product_to_group(self, group_id, product_id):
 		"""Add a product to a group"""
 		try:
 			with self._get_db_connection() as conn:
 				# Remove product from any existing group first (UNIQUE constraint on product_id)
+				# Also purge any existing custom parameter values tied to previous group's parameters
 				conn.execute('DELETE FROM group_products WHERE product_id = ?', (product_id,))
+				conn.execute('DELETE FROM product_group_parameter_values WHERE product_id = ?', (product_id,))
 				
 				# Add to new group
 				conn.execute('''
@@ -903,7 +967,10 @@ class DatabaseManager:
 		"""Remove a product from its group"""
 		try:
 			with self._get_db_connection() as conn:
+				# Remove relationship
 				conn.execute('DELETE FROM group_products WHERE product_id = ?', (product_id,))
+				# Purge any custom parameter values now that product is ungrouped
+				conn.execute('DELETE FROM product_group_parameter_values WHERE product_id = ?', (product_id,))
 				conn.commit()
 				
 				return self._success_response("Product removed from group successfully")
@@ -921,3 +988,83 @@ class DatabaseManager:
 			''', (product_id,))
 			row = cursor.fetchone()
 			return dict(row) if row else None
+
+	# === Group Parameter Methods ===
+
+	def get_group_parameters(self, group_id):
+		"""Return all parameters defined for a group"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT id, name, display_order
+				FROM group_parameters
+				WHERE group_id = ?
+				ORDER BY display_order, name
+			''', (group_id,))
+			return [dict(row) for row in cursor.fetchall()]
+
+	def create_group_parameter(self, group_id, name):
+		"""Create a new parameter for a group"""
+		try:
+			with self._get_db_connection() as conn:
+				# Determine next display_order
+				order_row = conn.execute('SELECT MAX(display_order) as max_order FROM group_parameters WHERE group_id = ?', (group_id,)).fetchone()
+				next_order = (order_row['max_order'] or -1) + 1
+				cursor = conn.execute('''
+					INSERT INTO group_parameters (group_id, name, display_order)
+					VALUES (?, ?, ?)
+				''', (group_id, name.strip(), next_order))
+				param_id = cursor.lastrowid
+				conn.commit()
+				return self._success_response("Group parameter created", parameter_id=param_id, display_order=next_order)
+		except Exception as e:
+			return self._error_response(e)
+
+	def delete_group_parameter(self, parameter_id):
+		"""Delete a group parameter and any product values referencing it"""
+		try:
+			with self._get_db_connection() as conn:
+				conn.execute('DELETE FROM product_group_parameter_values WHERE group_parameter_id = ?', (parameter_id,))
+				conn.execute('DELETE FROM group_parameters WHERE id = ?', (parameter_id,))
+				conn.commit()
+				return self._success_response("Group parameter deleted")
+		except Exception as e:
+			return self._error_response(e)
+
+	# === Product Parameter Value Methods ===
+
+	def get_product_group_parameter_values(self, product_id):
+		"""Get parameter values for a product (including parameter name & group_id)"""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT pgpv.id, pgpv.product_id, pgpv.group_parameter_id, pgpv.value,
+				       gp.name as parameter_name, gp.group_id
+				FROM product_group_parameter_values pgpv
+				JOIN group_parameters gp ON gp.id = pgpv.group_parameter_id
+				WHERE pgpv.product_id = ?
+			''', (product_id,))
+			return [dict(row) for row in cursor.fetchall()]
+
+	def set_product_group_parameter_values(self, product_id, values_list):
+		"""Set (upsert) parameter values for a product. values_list: [{parameter_id, value}]"""
+		try:
+			with self._get_db_connection() as conn:
+				for item in values_list or []:
+					param_id = item.get('parameter_id')
+					val = item.get('value', '')
+					if not param_id:
+						continue
+					# Try update first
+					updated = conn.execute('''
+						UPDATE product_group_parameter_values
+						SET value = ?, last_updated = CURRENT_TIMESTAMP
+						WHERE product_id = ? AND group_parameter_id = ?
+					''', (val, product_id, param_id))
+					if updated.rowcount == 0:
+						conn.execute('''
+							INSERT INTO product_group_parameter_values (product_id, group_parameter_id, value)
+							VALUES (?, ?, ?)
+						''', (product_id, param_id, val))
+				conn.commit()
+				return self._success_response("Product parameter values saved")
+		except Exception as e:
+			return self._error_response(e)

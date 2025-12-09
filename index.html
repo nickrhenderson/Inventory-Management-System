@@ -242,6 +242,11 @@
                     <div class="ingredient-selector" id="ingredientSelector"></div>
                 </div>
                 <div class="selected-ingredients" id="selectedIngredients"></div>
+                <!-- Dynamic Group Parameters (shown when a group with parameters is selected) -->
+                <div class="form-group" id="productGroupParametersWrapper" style="display:none;">
+                    <label>Group Custom Fields:</label>
+                    <div id="productGroupParametersContainer"></div>
+                </div>
                 <div class="form-actions">
                     <button type="button" class="modal-button cancel" onclick="closeProductModal()">Cancel</button>
                     <button type="submit" class="modal-button submit" id="submitProductButton">Add Product</button>
@@ -295,6 +300,11 @@
                 <div class="form-group">
                     <label for="groupName">Group Name:</label>
                     <input type="text" id="groupName" name="groupName" required autocomplete="off" placeholder="Enter group name...">
+                </div>
+                <div class="form-group" id="groupParametersSection">
+                    <label>Custom Parameters (optional):</label>
+                    <div id="groupParametersContainer"></div>
+                    <button type="button" class="modal-button submit" id="addGroupParameterButton" onclick="addGroupParameterField()" style="margin-top:10px; background:#007acc;">Add Parameter</button>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="modal-button cancel" onclick="closeGroupModal()">Cancel</button>
