@@ -431,6 +431,19 @@ function handleContextMenu(event) {
         }
     }
     
+    // If events tab, hide inventory-only items and show events-only
+    if (window.currentTab === 'events') {
+        const invOnly = document.querySelectorAll('.context-menu-item.inventory-only');
+        const evtOnly = document.querySelectorAll('.context-menu-item.events-only');
+        invOnly.forEach(el => el.style.display = 'none');
+        evtOnly.forEach(el => el.style.display = '');
+    } else {
+        const invOnly = document.querySelectorAll('.context-menu-item.inventory-only');
+        const evtOnly = document.querySelectorAll('.context-menu-item.events-only');
+        invOnly.forEach(el => el.style.display = '');
+        evtOnly.forEach(el => el.style.display = 'none');
+    }
+
     // Prevent default context menu
     event.preventDefault();
     console.log('Default prevented, showing context menu');

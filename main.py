@@ -10,7 +10,7 @@ import time
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.6.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -186,6 +186,14 @@ class InventoryAPI:
 	def set_product_group_parameter_values(self, product_id, values_list):
 		"""Set (upsert) custom parameter values for a product"""
 		return self.db_manager.set_product_group_parameter_values(product_id, values_list)
+
+	def get_inventory_events(self, limit=200):
+		"""Return inventory events newest-first."""
+		return self.db_manager.get_inventory_events(limit)
+
+	def add_inventory_events(self, events, title=None, event_date=None):
+		"""Add inventory events with validation (no over-removal)."""
+		return self.db_manager.add_inventory_events(events, title, event_date)
 	
 	def generate_barcode_pdf(self, barcode_id):
 		"""Generate a PDF file with a printable barcode optimized for 1.5" x 1" labels (PLS198)"""

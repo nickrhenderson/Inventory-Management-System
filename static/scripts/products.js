@@ -152,6 +152,14 @@ async function loadProductsData() {
 async function refreshInventoryData() {
     console.log('Refreshing inventory data...');
     
+    // Check if we're on the events tab
+    if (window.currentTab === 'events') {
+        if (typeof window.refreshEvents === 'function') {
+            await window.refreshEvents();
+        }
+        return;
+    }
+    
     // Get current search term (DO NOT CLEAR IT)
     const searchTerm = window.getCurrentSearchTerm ? window.getCurrentSearchTerm() : '';
     console.log('Current search term:', searchTerm);
@@ -624,7 +632,11 @@ async function editProduct(productId) {
         
     } catch (error) {
         console.error('Error loading product for edit:', error);
-        alert('Failed to load product data for editing.');
+        if (window.notifyError) {
+            window.notifyError('Failed to load product data for editing.');
+        } else {
+            alert('Failed to load product data for editing.');
+        }
     }
 }
 
@@ -632,6 +644,12 @@ async function editProduct(productId) {
 let currentEditingProductId = null;
 let pendingAmountChanges = new Map(); // productId -> {originalAmount, newAmount, productName}
 let amountChangeDetectionInitialized = false;
+
+function clampNonNegativeInt(value) {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return 0;
+    return Math.max(0, parsed);
+}
 
 /**
  * Start editing session for a product
@@ -647,11 +665,17 @@ function startEditingSession(productId, amountInput) {
     currentEditingProductId = productId;
     
     // Store original amount if not already stored
+    // Normalize the current value immediately so negatives never persist into pending state
+    const normalizedCurrent = clampNonNegativeInt(amountInput.value);
+    if (String(amountInput.value) !== String(normalizedCurrent)) {
+        amountInput.value = normalizedCurrent;
+    }
+
     if (!pendingAmountChanges.has(productId)) {
-        const originalAmount = parseInt(amountInput.dataset.originalAmount) || 0;
+        const originalAmount = clampNonNegativeInt(amountInput.dataset.originalAmount);
         pendingAmountChanges.set(productId, {
             originalAmount: originalAmount,
-            newAmount: parseInt(amountInput.value) || 0,
+            newAmount: normalizedCurrent,
             productName: amountInput.dataset.productName
         });
     }
@@ -672,7 +696,7 @@ function adjustProductAmountLocal(productId, delta) {
     // Start editing session
     startEditingSession(productId, amountInput);
     
-    const currentValue = parseInt(amountInput.value) || 0;
+    const currentValue = clampNonNegativeInt(amountInput.value);
     const newValue = Math.max(0, currentValue + delta); // Prevent negative values
     
     amountInput.value = newValue;
@@ -685,6 +709,8 @@ function adjustProductAmountLocal(productId, delta) {
  */
 function handleAmountInputFocus(input) {
     const productId = parseInt(input.dataset.productId);
+    // Clamp immediately so typing "-" or a negative value doesn't leak into confirmation logic
+    input.value = clampNonNegativeInt(input.value);
     startEditingSession(productId, input);
 }
 
@@ -694,7 +720,7 @@ function handleAmountInputFocus(input) {
  */
 function handleAmountInputChange(input) {
     const productId = parseInt(input.dataset.productId);
-    const newAmount = Math.max(0, parseInt(input.value) || 0); // Ensure non-negative
+    const newAmount = clampNonNegativeInt(input.value); // Ensure non-negative
     input.value = newAmount; // Update display to show corrected value
     
     // Update pending change
@@ -741,6 +767,9 @@ function checkForPendingChanges(productId) {
  * @param {Object} change - Change object with originalAmount, newAmount, productName
  */
 function showAmountChangeConfirmation(productId, change) {
+    // Hard-stop: never allow negative values to be confirmed
+    change.newAmount = clampNonNegativeInt(change.newAmount);
+
     showConfirmationModal(
         'Confirm Amount Change',
         `Confirm your change for "${change.productName}" amount from ${change.originalAmount} to ${change.newAmount}.`,
@@ -749,7 +778,8 @@ function showAmountChangeConfirmation(productId, change) {
         async () => {
             // User confirmed - apply the change
             try {
-                const result = await pywebview.api.update_product_amount(productId, change.newAmount);
+                const safeAmount = clampNonNegativeInt(change.newAmount);
+                const result = await pywebview.api.update_product_amount(productId, safeAmount);
                 
                 if (result.success) {
                     // Update the original amount to the new value
@@ -757,10 +787,19 @@ function showAmountChangeConfirmation(productId, change) {
                     if (row) {
                         const amountInput = row.querySelector('.amount-input');
                         if (amountInput) {
-                            amountInput.dataset.originalAmount = change.newAmount.toString();
+                            amountInput.dataset.originalAmount = safeAmount.toString();
                         }
                     }
                     
+                    // A manual amount update logs an inventory event; ensure Events reloads.
+                    try {
+                        if (typeof window.markEventsDirty === 'function') {
+                            window.markEventsDirty();
+                        }
+                    } catch (refreshErr) {
+                        console.warn('Unable to mark events dirty after amount update:', refreshErr);
+                    }
+
                     // Clean up pending changes
                     pendingAmountChanges.delete(productId);
                     currentEditingProductId = null;
@@ -769,7 +808,11 @@ function showAmountChangeConfirmation(productId, change) {
                 }
             } catch (error) {
                 console.error('Error updating product amount:', error);
-                alert('Failed to update product amount. Please try again.');
+                if (window.notifyError) {
+                    window.notifyError('Failed to update product amount. Please try again.');
+                } else {
+                    alert('Failed to update product amount. Please try again.');
+                }
                 
                 // Revert the input to original value from database
                 revertAmountToOriginal(productId);
@@ -872,7 +915,11 @@ async function confirmDeleteProduct(productId, productName) {
                 }
             } catch (error) {
                 console.error('Error deleting product:', error);
-                alert('Failed to delete product. Please try again.');
+                if (window.notifyError) {
+                    window.notifyError('Failed to delete product. Please try again.');
+                } else {
+                    alert('Failed to delete product. Please try again.');
+                }
             }
         }
     );

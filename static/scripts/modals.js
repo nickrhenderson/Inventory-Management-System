@@ -65,7 +65,11 @@ async function openProductModal(productData = null, isEditMode = false) {
         }
     } catch (error) {
         console.error('Error opening product modal:', error);
-        alert('Failed to load ingredients for product creation.');
+        if (window.notifyError) {
+            window.notifyError('Failed to load ingredients for product creation.');
+        } else {
+            alert('Failed to load ingredients for product creation.');
+        }
     }
 }
 
@@ -872,6 +876,15 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
     `;
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
+
+    // Product creation logs an inventory event in the DB; ensure Events will reload.
+    try {
+        if (typeof window.markEventsDirty === 'function') {
+            window.markEventsDirty();
+        }
+    } catch (e) {
+        console.warn('Unable to mark events dirty after product creation:', e);
+    }
     
     // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
@@ -1051,7 +1064,11 @@ async function openIngredientModal(ingredientData = null, isEditMode = false) {
         }
     } catch (error) {
         console.error('Error opening ingredient modal:', error);
-        alert('Failed to open ingredient creation modal.');
+        if (window.notifyError) {
+            window.notifyError('Failed to open ingredient creation modal.');
+        } else {
+            alert('Failed to open ingredient creation modal.');
+        }
     }
 }
 
@@ -1294,7 +1311,12 @@ function handleIngredientCreationError(submitButton, errorMessage) {
     submitButton.style.color = 'white';
     submitButton.disabled = true; // Keep disabled after failure
     
-    alert(`${ERROR_MESSAGES.CREATE_INGREDIENT_FAILED}: ${errorMessage}`);
+    const msg = `${ERROR_MESSAGES.CREATE_INGREDIENT_FAILED}: ${errorMessage}`;
+    if (window.notifyError) {
+        window.notifyError(msg);
+    } else {
+        alert(msg);
+    }
 }
 
 /**
@@ -1352,7 +1374,12 @@ function handleIngredientUpdateError(submitButton, errorMessage) {
     submitButton.style.color = 'white';
     submitButton.disabled = true; // Keep disabled after failure
     
-    alert(`Failed to update ingredient: ${errorMessage}`);
+    const msg = `Failed to update ingredient: ${errorMessage}`;
+    if (window.notifyError) {
+        window.notifyError(msg);
+    } else {
+        alert(msg);
+    }
 }
 
 /**
@@ -1560,7 +1587,11 @@ async function handleGroupSubmission(event) {
     const groupName = groupNameInput.value.trim();
     
     if (!groupName) {
-        alert('Please enter a group name');
+        if (window.notifyError) {
+            window.notifyError('Please enter a group name');
+        } else {
+            alert('Please enter a group name');
+        }
         return;
     }
     
@@ -1654,7 +1685,12 @@ async function handleGroupSubmission(event) {
         submitButton.textContent = '✗ Failed';
         submitButton.style.backgroundColor = '#dc3545';
         submitButton.style.color = 'white';
-        alert('Failed to save group: ' + (error.message || 'Unknown error'));
+        const msg = 'Failed to save group: ' + (error.message || 'Unknown error');
+        if (window.notifyError) {
+            window.notifyError(msg);
+        } else {
+            alert(msg);
+        }
         setTimeout(() => {
             submitButton.textContent = window.editingGroupId ? 'Save Changes' : 'Create Group';
             submitButton.style.backgroundColor = '';

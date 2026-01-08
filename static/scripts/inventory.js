@@ -12,6 +12,11 @@ async function initializeApp() {
     
     // Initialize context menu functionality
     initializeContextMenu();
+
+    // Default tab
+    if (typeof setActiveTab === 'function') {
+        setActiveTab('inventory');
+    }
     
     // Load and display the current version
     await loadAndDisplayVersion();
@@ -95,11 +100,21 @@ async function checkForUpdatesAndStyleButton() {
                                     // Close the application - the batch file will restart it
                                     window.close();
                                 } else {
-                                    alert(`Update failed: ${updateResponse.message}`);
+                                    const msg = `Update failed: ${updateResponse.message}`;
+                                    if (window.notifyError) {
+                                        window.notifyError(msg);
+                                    } else {
+                                        alert(msg);
+                                    }
                                 }
                             } catch (error) {
                                 console.error('Error during update:', error);
-                                alert('Failed to download update. Please try again later.');
+                                const msg = 'Failed to download update. Please try again later.';
+                                if (window.notifyError) {
+                                    window.notifyError(msg);
+                                } else {
+                                    alert(msg);
+                                }
                             }
                         }
                     };

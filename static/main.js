@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
         { src: "static/scripts/ingredients.js", isModule: false },
         { src: "static/scripts/products.js", isModule: false },
         { src: "static/scripts/modals.js", isModule: false },
+        { src: "static/scripts/events.js", isModule: false },
         { src: "static/scripts/inventory.js", isModule: false }
     ];
 
@@ -32,8 +33,14 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('All modules loaded successfully');
             
             // Wait a bit longer for pywebview to initialize, then load app
-            setTimeout(() => {
-                initializeApp();
+            setTimeout(async () => {
+                try {
+                    await initializeApp();
+                    window.dispatchEvent(new CustomEvent('app:initialized'));
+                } catch (initErr) {
+                    console.error('Error initializing app:', initErr);
+                    window.dispatchEvent(new CustomEvent('app:failed', { detail: initErr }));
+                }
             }, 1000); // 1 second delay
 
         } catch (err) {

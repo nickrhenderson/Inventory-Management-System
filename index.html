@@ -9,9 +9,8 @@
     <title>Inventory System</title>
     <style>
         /* Critical styles to prevent FOUC - must be inline and first */
-        /* Hide all body content by default until loaded */
+        /* Prevent scroll while loading */
         body:not(.loaded) {
-            visibility: hidden !important;
             overflow: hidden !important;
         }
         
@@ -29,6 +28,9 @@
             justify-content: center;
             font-family: Arial, sans-serif;
             visibility: visible !important;
+            opacity: 1;
+            transition: opacity 240ms ease, visibility 0s linear 240ms;
+            will-change: opacity;
         }
         
         .loading-content {
@@ -56,91 +58,145 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* When loaded, hide loading screen and show content */
+        /* When loaded, fade out loading screen and fade in content */
         body.loaded {
-            visibility: visible !important;
-            overflow: visible !important;
+            /* Keep overflow behavior consistent with app CSS to avoid layout shifts */
+            overflow: hidden !important;
         }
         
         body.loaded #loading-screen {
-            display: none !important;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        
+        .app-shell {
+            /* Preserve original full-height flex layout (header/tabs fixed, main stretches) */
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            opacity: 0;
+            /* NOTE: Avoid transform here; it breaks position:fixed children (modal backdrops) */
+            transition: opacity 260ms ease;
+            will-change: opacity;
+        }
+        
+        body.loaded .app-shell {
+            opacity: 1;
         }
     </style>
     <link rel="stylesheet" href="static/styles.css">
     <script src="static/main.js" defer></script>
     <script>
-        // Track when the page started loading
         const pageLoadStart = Date.now();
+        let stylesReady = false;
+        let appReady = false;
+        let loadingCleared = false;
         
-        // Global flag to track when initial loading screen is complete
         window.loadingScreenComplete = false;
         
         // Function to trigger all pending animations
         window.triggerPendingAnimations = function() {
             console.log('Triggering pending animations...');
             
-            // Trigger product animations if pending
             if (window.pendingProductAnimation) {
                 window.pendingProductAnimation();
                 window.pendingProductAnimation = null;
             }
             
-            // Trigger ingredient animations if pending
             if (window.pendingIngredientAnimation) {
                 window.pendingIngredientAnimation();
                 window.pendingIngredientAnimation = null;
             }
         };
         
-        // Wait for styles.css to load, then show the app (with minimum 3 second delay)
+        function startReveal() {
+            if (loadingCleared) return;
+            loadingCleared = true;
+
+            const loadingScreen = document.getElementById('loading-screen');
+            let revealed = false;
+
+            const finishReveal = function() {
+                if (revealed) return;
+                revealed = true;
+
+                // Give the app-shell fade a beat to finish before kicking off row/group animations
+                setTimeout(function() {
+                    window.loadingScreenComplete = true;
+                    if (window.triggerPendingAnimations) {
+                        window.triggerPendingAnimations();
+                    }
+                    console.log('App revealed in', Date.now() - pageLoadStart, 'ms');
+                }, 90);
+            };
+
+            // When the loading screen fade finishes, mark loading complete and trigger animations.
+            if (loadingScreen) {
+                loadingScreen.addEventListener('transitionend', function(e) {
+                    if (e.propertyName === 'opacity') {
+                        finishReveal();
+                    }
+                }, { once: true });
+            }
+
+            // Start transitions on next frame (helps ensure the fade runs)
+            requestAnimationFrame(function() {
+                document.body.classList.add('loaded');
+            });
+
+            // Fallback: in case transitionend doesn't fire
+            setTimeout(finishReveal, 450);
+        }
+
+        function maybeShowApp() {
+            if (stylesReady && appReady) {
+                startReveal();
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             const styleLink = document.querySelector('link[href*="styles.css"]');
             if (styleLink) {
                 styleLink.addEventListener('load', function() {
-                    showAppAfterMinimumDelay();
+                    stylesReady = true;
+                    maybeShowApp();
                 });
             } else {
                 // Fallback if link not found
-                setTimeout(function() {
-                    showAppAfterMinimumDelay();
-                }, 100);
+                stylesReady = true;
+                maybeShowApp();
             }
         });
         
-        // Function to show app after ensuring minimum 3 second loading time
-        function showAppAfterMinimumDelay() {
-            const elapsed = Date.now() - pageLoadStart;
-            const remaining = Math.max(0, 3000 - elapsed);
-            
-            setTimeout(function() {
-                // Add loaded class to body to trigger visibility and hide loading screen
-                document.body.classList.add('loaded');
-                window.loadingScreenComplete = true;
-                
-                // Trigger any pending animations that were waiting for the loading screen
-                if (window.triggerPendingAnimations) {
-                    window.triggerPendingAnimations();
-                }
-                
-                console.log('App ready after minimum loading time');
-            }, remaining);
-        }
+        // Catch the app readiness event from main.js / initializeApp
+        window.addEventListener('app:initialized', function() {
+            appReady = true;
+            maybeShowApp();
+        });
         
-        // Fallback in case DOMContentLoaded doesn't fire
+        // If initialization fails, log the error and still attempt to show the UI
+        window.addEventListener('app:failed', function(event) {
+            console.error('App failed to initialize:', event.detail);
+            appReady = true; // allow UI to render so error states can be visible
+            maybeShowApp();
+        });
+        
+        // Fallback: ensure loading screen does not hang forever
         window.addEventListener('load', function() {
-            const elapsed = Date.now() - pageLoadStart;
-            const remaining = Math.max(0, 3000 - elapsed);
-            
+            if (!stylesReady) {
+                stylesReady = true;
+                maybeShowApp();
+            }
+            // Safety net to clear the loading screen after 12s regardless
             setTimeout(function() {
-                // Add loaded class to body to trigger visibility and hide loading screen
-                document.body.classList.add('loaded');
-                window.loadingScreenComplete = true;
-                
-                // Trigger any pending animations that were waiting for the loading screen
-                if (window.triggerPendingAnimations) {
-                    window.triggerPendingAnimations();
+                if (!loadingCleared) {
+                    console.warn('Forcing loading screen to hide after timeout');
+                    startReveal();
                 }
-            }, remaining);
+            }, 12000);
         });
     </script>
 </head>
@@ -153,6 +209,7 @@
         </div>
     </div>
     
+    <div class="app-shell">
     <!-- Top Navigation Bar -->
     <header class="top-bar">
         <div class="search-container">
@@ -165,38 +222,63 @@
             v0.3.3
         </button>
     </header>
+
+    <!-- Tabs -->
+    <nav class="tabs" id="mainTabs">
+        <button class="tab active" data-tab="inventory">Inventory</button>
+        <button class="tab" data-tab="events">Events</button>
+    </nav>
     
     <!-- Main Application Content -->
     <main class="main">
-        <!-- Products Panel -->
-        <section class="box left">
-            <div class="inventory-container">
-                <div id="inventoryTable"></div>
-            </div>
-        </section>
-        
-        <!-- Ingredients Panel -->
-        <section class="box right">
-            <div class="ingredients-container">
-                <div id="rightBoxContent"></div>
-            </div>
-            <footer class="ingredients-total-fixed" id="ingredientsTotalFixed"></footer>
-        </section>
+        <!-- Inventory View -->
+        <div class="tab-view" id="inventoryView">
+            <section class="box left">
+                <div class="inventory-container">
+                    <div id="inventoryTable"></div>
+                </div>
+            </section>
+            
+            <section class="box right">
+                <div class="ingredients-container">
+                    <div id="rightBoxContent"></div>
+                </div>
+                <footer class="ingredients-total-fixed" id="ingredientsTotalFixed"></footer>
+            </section>
+        </div>
+
+        <!-- Events View -->
+        <div class="tab-view" id="eventsView" style="display:none;">
+            <section class="box left">
+                <div class="events-container">
+                    <div id="eventsList"></div>
+                </div>
+            </section>
+            <section class="box right">
+                <div class="events-detail-placeholder">
+                    <p>Event details will appear here.</p>
+                </div>
+            </section>
+        </div>
     </main>
     
     <!-- Context Menu -->
     <div class="context-menu" id="contextMenu">
-        <div class="context-menu-item" onclick="openProductModal(); hideContextMenu()">
+        <div class="context-menu-item inventory-only" onclick="openProductModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Product</span>
         </div>
-        <div class="context-menu-item" onclick="openIngredientModal(); hideContextMenu()">
+        <div class="context-menu-item inventory-only" onclick="openIngredientModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Ingredient</span>
         </div>
-        <div class="context-menu-item" onclick="openGroupModal(); hideContextMenu()">
+        <div class="context-menu-item inventory-only" onclick="openGroupModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Create Group</span>
+        </div>
+        <div class="context-menu-item events-only" onclick="openEventModal(); hideContextMenu()" style="display:none;">
+            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <span>Add Event</span>
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" onclick="refreshFiles(); hideContextMenu()">
@@ -212,7 +294,7 @@
     <div class="modal-backdrop creation-modal-backdrop" id="productModalBackdrop" onclick="closeProductModal()">
         <div class="modal-content creation-modal" id="productModal" onclick="event.stopPropagation()">
             <button class="modal-close-button" onclick="closeProductModal()" title="Close">×</button>
-            <h3>Add New Product</h3>
+            <h3>Add Product</h3>
             <form id="productForm">
                 <div class="form-group">
                     <label for="productName">Product Name:</label>
@@ -260,7 +342,7 @@
     <div class="modal-backdrop creation-modal-backdrop" id="ingredientModalBackdrop" onclick="closeIngredientModal()">
         <div class="modal-content creation-modal" id="ingredientModal" onclick="event.stopPropagation()">
             <button class="modal-close-button" onclick="closeIngredientModal()" title="Close">×</button>
-            <h3>Add New Ingredient</h3>
+            <h3>Add Ingredient</h3>
             <form id="ingredientForm">
                 <div class="form-group">
                     <label for="ingredientName">Ingredient Name:</label>
@@ -312,6 +394,34 @@
                 </div>
             </form>
         </div>
+    </div>
+
+    <!-- Event Creation Modal -->
+    <div class="modal-backdrop creation-modal-backdrop" id="eventModalBackdrop" onclick="closeEventModal()" style="display:none;">
+        <div class="modal-content creation-modal" id="eventModal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeEventModal()" title="Close">×</button>
+            <h3>Add Inventory Event</h3>
+            <form id="eventForm">
+                <div class="form-group">
+                    <label for="eventDate">Event Date:</label>
+                    <input type="date" id="eventDate" name="eventDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventTitle">Title:</label>
+                    <input type="text" id="eventTitle" name="eventTitle" placeholder="Adjustment, Restock, etc." required>
+                </div>
+                <div class="form-group">
+                    <label for="eventProductSelection">Select Products:</label>
+                    <div class="event-product-selector" id="eventProductSelector"></div>
+                </div>
+                <div class="selected-event-products" id="selectedEventProducts"></div>
+                <div class="form-actions">
+                    <button type="button" class="modal-button cancel" onclick="closeEventModal()">Cancel</button>
+                    <button type="submit" class="modal-button submit" id="submitEventButton">Save Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
     </div>
 </body>
 </html>

@@ -84,6 +84,14 @@ class DatabaseManager:
 				('group_parameter_id', 'INTEGER NOT NULL'),
 				('value', 'TEXT'),
 				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
+			'inventory_events': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('product_id', 'INTEGER NOT NULL'),
+				('delta', 'INTEGER NOT NULL'),
+				('event_title', 'TEXT'),
+				('event_date', 'DATE DEFAULT CURRENT_DATE'),
+				('created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
 			]
 		}
 		
@@ -113,6 +121,19 @@ class DatabaseManager:
 	def _error_response(self, error):
 		"""Create standardized error response"""
 		return {"success": False, "error": str(error)}
+
+	def _log_inventory_event(self, conn, product_id, delta, title=None, event_date=None):
+		"""Log a quantity delta for a product."""
+		if delta == 0:
+			return
+		event_date_value = event_date or datetime.now().date()
+		conn.execute(
+			"""
+			INSERT INTO inventory_events (product_id, delta, event_title, event_date)
+			VALUES (?, ?, ?, ?)
+			""",
+			(product_id, delta, title or "Inventory change", event_date_value)
+		)
 	
 	def generate_barcode_id(self, prefix="", length=12):
 		"""Generate a barcode-compatible unique ID"""
@@ -580,6 +601,7 @@ class DatabaseManager:
 					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
 					WHERE id = ?
 				''', (new_amount, product_id))
+				self._log_inventory_event(conn, product_id, new_amount - current_amount, "Manual adjustment")
 				
 				conn.commit()
 				
@@ -596,12 +618,13 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# Verify product exists
-				existing_product = conn.execute('SELECT id FROM products WHERE id = ?', (product_id,)).fetchone()
+				existing_product = conn.execute('SELECT id, amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not existing_product:
 					return self._error_response("Product not found")
 				
 				# Ensure amount is non-negative
 				amount = max(0, int(new_amount))
+				current_amount = existing_product[1] or 0
 				
 				# Update the amount
 				conn.execute('''
@@ -609,6 +632,7 @@ class DatabaseManager:
 					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
 					WHERE id = ?
 				''', (amount, product_id))
+				self._log_inventory_event(conn, product_id, amount - current_amount, "Manual Inventory Adjustment")
 				
 				conn.commit()
 				
@@ -739,6 +763,7 @@ class DatabaseManager:
 				conn.execute('''
 					UPDATE products SET total_quantity = ?, total_cost = ? WHERE id = ?
 				''', (total_quantity, total_cost, product_id))
+				self._log_inventory_event(conn, product_id, amount, "Product created", mixed_date)
 				
 				conn.commit()
 				
@@ -753,6 +778,54 @@ class DatabaseManager:
 				"success": False,
 				"message": str(e)
 			}
+
+	def get_inventory_events(self, limit=200):
+		"""Return inventory events ordered newest first."""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute(
+				"""
+				SELECT e.id, e.product_id, p.product_name, p.batch_number, e.delta, e.event_title,
+				       e.event_date, e.created_at
+				FROM inventory_events e
+				JOIN products p ON p.id = e.product_id
+				ORDER BY e.created_at DESC
+				LIMIT ?
+				""",
+				(limit,)
+			)
+			return [dict(row) for row in cursor.fetchall()]
+
+	def add_inventory_events(self, events, title=None, event_date=None):
+		"""Add one or more inventory events and update product amounts accordingly."""
+		try:
+			with self._get_db_connection() as conn:
+				for entry in events:
+					product_id = entry.get('product_id')
+					delta = int(entry.get('delta', 0))
+					if not product_id or delta == 0:
+						continue
+					current_row = conn.execute('SELECT amount FROM products WHERE id = ?', (product_id,)).fetchone()
+					if not current_row:
+						raise Exception(f"Product {product_id} not found")
+					current_amount = current_row[0] or 0
+					if delta < 0 and current_amount + delta < 0:
+						raise Exception(f"Cannot remove more than in stock for product {product_id}")
+					new_amount = current_amount + delta
+					conn.execute(
+						"UPDATE products SET amount = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?",
+						(new_amount, product_id)
+					)
+					self._log_inventory_event(
+						conn,
+						product_id,
+						delta,
+						title or entry.get('event_title') or "Inventory event",
+						event_date or entry.get('event_date')
+					)
+				conn.commit()
+				return self._success_response("Events added")
+		except Exception as e:
+			return self._error_response(e)
 	
 	def create_ingredient(self, ingredient_data):
 		"""Create a new ingredient with barcode generation"""

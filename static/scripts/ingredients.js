@@ -549,7 +549,11 @@ async function toggleIngredientFlag(ingredientId, ingredientName, isCurrentlyFla
                 }
             } catch (error) {
                 console.error('Error toggling ingredient flag:', error);
-                alert(ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
+                if (window.notifyError) {
+                    window.notifyError(ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
+                } else {
+                    alert(ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
+                }
             }
         }
     );
@@ -572,7 +576,11 @@ async function editIngredient(ingredientId) {
         
     } catch (error) {
         console.error('Error loading ingredient for edit:', error);
-        alert('Failed to load ingredient data for editing.');
+        if (window.notifyError) {
+            window.notifyError('Failed to load ingredient data for editing.');
+        } else {
+            alert('Failed to load ingredient data for editing.');
+        }
     }
 }
 
@@ -599,7 +607,11 @@ async function confirmDeleteIngredient(ingredientId, ingredientName) {
                 }
             } catch (error) {
                 console.error('Error deleting ingredient:', error);
-                alert('Failed to delete ingredient. Please try again.');
+                if (window.notifyError) {
+                    window.notifyError('Failed to delete ingredient. Please try again.');
+                } else {
+                    alert('Failed to delete ingredient. Please try again.');
+                }
             }
         }
     );

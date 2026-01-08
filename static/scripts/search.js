@@ -219,6 +219,18 @@ function initializeSearch() {
         searchBar.addEventListener('input', (e) => {
             const searchTerm = e.target.value.trim();
             
+            // Check if we're on the events tab
+            if (window.currentTab === 'events') {
+                // Call events search directly (no debounce needed for simple filtering)
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (typeof window.filterEvents === 'function') {
+                        window.filterEvents(searchTerm);
+                    }
+                }, 150);
+                return;
+            }
+            
             // Cancel previous search if still running
             if (currentSearchController) {
                 currentSearchController.abort();
@@ -244,6 +256,15 @@ function initializeSearch() {
             if (e.key === 'Escape') {
                 searchBar.value = '';
                 clearTimeout(searchTimeout);
+                
+                // Check if we're on the events tab
+                if (window.currentTab === 'events') {
+                    if (typeof window.filterEvents === 'function') {
+                        window.filterEvents('');
+                    }
+                    return;
+                }
+                
                 if (currentSearchController) {
                     currentSearchController.abort();
                     currentSearchController = null;
