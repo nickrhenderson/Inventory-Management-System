@@ -10,7 +10,7 @@ import time
 from database import DatabaseManager, get_data_path
 
 # Application version
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
