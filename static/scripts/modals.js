@@ -186,7 +186,7 @@ async function populateProductForm(productData) {
         batchInput.id = 'productBatchDisplay';
         batchInput.value = productData.batch_number || '';
         batchInput.readOnly = true;
-        batchInput.style.cssText = 'background-color: #f5f5f5; color: #666;';
+        batchInput.style.cssText = 'background-color: var(--bg-light-gray); color: var(--text-gray);';
         batchInput.placeholder = 'Batch ID';
         batchInput.title = 'Batch ID (cannot be changed)';
         
@@ -328,7 +328,7 @@ function displayIngredientSelector(ingredients) {
                 <input type="checkbox" id="ingredient-${ingredient.id}" onchange="handleIngredientChange(${ingredient.id})">
                 <div>
                     <strong>${ingredient.name}</strong>
-                    <div style="font-size: 0.9em; color: #666;">${ingredient.barcode_id}${quantityDisplay}</div>
+                    <div style="font-size: 0.9em; color: var(--text-gray);">${ingredient.barcode_id}${quantityDisplay}</div>
                 </div>
             </div>
         `;
@@ -872,7 +872,7 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
     // Show success message without animation
     barcodeResult.innerHTML = `
         <div style="color: #4caf50; font-weight: 600;">${SUCCESS_MESSAGES.PRODUCT_CREATED}</div>
-        <div style="color: #666; font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been added to your inventory.</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been added to your inventory.</div>
     `;
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
@@ -921,7 +921,7 @@ function handleProductCreationError(submitButton, barcodeResult, errorMessage) {
     // Show error in result area
     barcodeResult.innerHTML = `
         <div style="color: #f44336; font-weight: 600;">Creation Failed</div>
-        <div style="color: #666; font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
     `;
     barcodeResult.className = 'barcode-result error';
     barcodeResult.style.display = 'block';
@@ -952,7 +952,7 @@ function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
     // Show success message without animation
     barcodeResult.innerHTML = `
         <div style="color: #4caf50; font-weight: 600;">Product Updated Successfully</div>
-        <div style="color: #666; font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been updated.</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been updated.</div>
     `;
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
@@ -1003,7 +1003,7 @@ function handleProductUpdateError(submitButton, barcodeResult, errorMessage) {
     // Show error in result area
     barcodeResult.innerHTML = `
         <div style="color: #f44336; font-weight: 600;">Update Failed</div>
-        <div style="color: #666; font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">${errorMessage}</div>
     `;
     barcodeResult.className = 'barcode-result error';
     barcodeResult.style.display = 'block';
@@ -1114,7 +1114,7 @@ function populateIngredientForm(ingredientData) {
         barcodeInput.id = 'ingredientBarcodeDisplay';
         barcodeInput.value = ingredientData.barcode_id || '';
         barcodeInput.readOnly = true;
-        barcodeInput.style.cssText = 'background-color: #f5f5f5; color: #666;';
+        barcodeInput.style.cssText = 'background-color: var(--bg-light-gray); color: var(--text-gray);';
         barcodeInput.placeholder = 'Barcode ID';
         barcodeInput.title = 'Barcode ID (cannot be changed)';
         
@@ -1341,7 +1341,7 @@ function handleIngredientUpdateSuccess(submitButton, result) {
     if (container) {
         container.innerHTML = `
             <div style="color: #4caf50; font-weight: 600;">Ingredient Updated Successfully</div>
-            <div style="color: #666; font-size: 0.9em; margin-top: 8px;">Ingredient "${result.ingredient ? result.ingredient.name : 'Ingredient'}" has been updated.</div>
+            <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Ingredient "${result.ingredient ? result.ingredient.name : 'Ingredient'}" has been updated.</div>
         `;
         
         // Show the container with proper CSS classes
@@ -1751,11 +1751,11 @@ async function loadSelectedGroupParameters(groupId, productId = null) {
         params.forEach(param => {
             const row = document.createElement('div');
             row.className = 'product-group-parameter-row';
-            row.style.cssText = 'display:flex; flex-direction:column; gap:4px; margin-bottom:10px; background:#f5f5f5; padding:10px; border-radius:6px;';
+            row.style.cssText = 'display:flex; flex-direction:column; gap:4px; margin-bottom:10px; background:var(--bg-light-gray); padding:10px; border-radius:6px;';
             const value = existingValuesMap.get(param.id) || '';
             row.innerHTML = `
-                <label style="font-weight:600; color:#333;">${param.name}</label>
-                <input type="text" data-parameter-id="${param.id}" class="product-group-parameter-input" value="${value}" placeholder="Enter value..." style="padding:8px; border:1px solid #ccc; border-radius:6px;" />
+                <label style="font-weight:600; color:var(--text-primary);">${param.name}</label>
+                <input type="text" data-parameter-id="${param.id}" class="product-group-parameter-input" value="${value}" placeholder="Enter value..." style="padding:8px; border:1px solid var(--border-light-gray); border-radius:6px; background: var(--bg-white); color: var(--text-primary);" />
             `;
             container.appendChild(row);
         });

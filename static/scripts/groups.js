@@ -607,7 +607,7 @@ function showGroupSelectionMenu(productId, x, y) {
     let menuHTML = '';
     
     if (productGroups.length === 0) {
-        menuHTML = '<div class="context-menu-item" style="color: #999; cursor: default;">No groups available</div>';
+        menuHTML = '<div class="context-menu-item" style="color: var(--text-gray); cursor: default;">No groups available</div>';
     } else {
         productGroups.forEach(group => {
             const isInGroup = group.productIds.includes(productId);
@@ -665,6 +665,7 @@ let draggedGroupId = null;
 let draggedElement = null;
 let placeholder = null;
 let orderUpdated = false;
+let reflowAnimationFrame = null;
 
 /**
  * Handle drag start event
@@ -723,17 +724,81 @@ function handleDragOver(e) {
         if (mouseY < targetMiddle) {
             // Insert before target
             if (targetGroup !== placeholder.nextSibling) {
-                container.insertBefore(placeholder, targetGroup);
+                animateGroupReflow(container, () => {
+                    container.insertBefore(placeholder, targetGroup);
+                });
             }
         } else {
             // Insert after target
             if (targetGroup.nextSibling !== placeholder) {
-                container.insertBefore(placeholder, targetGroup.nextSibling);
+                animateGroupReflow(container, () => {
+                    container.insertBefore(placeholder, targetGroup.nextSibling);
+                });
             }
         }
     }
     
     return false;
+}
+
+/**
+ * Animate the layout shift for groups when the placeholder moves.
+ * Uses a FLIP-style transform so the affected groups glide into place.
+ * @param {HTMLElement} container - Group container
+ * @param {Function} mutateLayout - Function that changes the DOM order
+ */
+function animateGroupReflow(container, mutateLayout) {
+    if (!container || typeof mutateLayout !== 'function') {
+        return;
+    }
+
+    if (reflowAnimationFrame) {
+        cancelAnimationFrame(reflowAnimationFrame);
+        reflowAnimationFrame = null;
+    }
+
+    const movingGroups = Array.from(container.querySelectorAll('.product-group'))
+        .filter(group => group !== draggedElement);
+
+    const firstPositions = new Map(
+        movingGroups.map(group => [group, group.getBoundingClientRect()])
+    );
+
+    mutateLayout();
+
+    reflowAnimationFrame = requestAnimationFrame(() => {
+        const lastPositions = new Map(
+            movingGroups.map(group => [group, group.getBoundingClientRect()])
+        );
+
+        movingGroups.forEach(group => {
+            const firstRect = firstPositions.get(group);
+            const lastRect = lastPositions.get(group);
+
+            if (!firstRect || !lastRect) {
+                return;
+            }
+
+            const deltaY = firstRect.top - lastRect.top;
+            if (deltaY === 0) {
+                return;
+            }
+
+            group.style.transition = 'none';
+            group.style.transform = `translateY(${deltaY}px)`;
+        });
+
+        container.getBoundingClientRect();
+
+        requestAnimationFrame(() => {
+            movingGroups.forEach(group => {
+                if (group.style.transform) {
+                    group.style.transition = '';
+                    group.style.transform = '';
+                }
+            });
+        });
+    });
 }
 
 /**
@@ -1135,10 +1200,10 @@ function showNoProductsMessage() {
     
     const message = document.createElement('div');
     message.className = 'no-products-message';
-    message.style.cssText = 'text-align: center; color: #666; padding: 40px 24px;';
+    message.style.cssText = 'text-align: center; color: var(--text-gray); padding: 40px 24px;';
     message.innerHTML = `
-        <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: #666; border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
-        <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+        <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: var(--text-primary); border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
+        <p style="margin: 0; color: var(--text-gray);">Try adjusting your search terms</p>
     `;
     container.appendChild(message);
 }

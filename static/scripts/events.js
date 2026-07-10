@@ -8,6 +8,23 @@ let inventorySearchTerm = '';
 let eventGroupObserver = null;
 let eventsLoaded = false;
 let eventsDirty = false;
+let tabTransitionToken = 0;
+
+const TAB_CONTENT_FADE_MS = 220;
+const TAB_BOX_TRANSITION_MS = 320;
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function nextFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function resetTabTransitionClasses(inventoryView, eventsView) {
+    inventoryView.classList.remove('tab-content-hidden', 'tab-collapsed');
+    eventsView.classList.remove('tab-content-hidden', 'tab-content-hidden-reverse');
+}
 
 // Mark events as needing a refresh because the DB likely changed.
 // If the user is currently on Events, refresh immediately; otherwise reload next time.
@@ -77,33 +94,78 @@ function animateEventGroupIn(group) {
 }
 
 function setActiveTab(tab) {
+    const transitionId = ++tabTransitionToken;
     currentTab = tab;
     window.currentTab = tab;
     const inventoryView = document.getElementById('inventoryView');
     const eventsView = document.getElementById('eventsView');
     const tabs = document.querySelectorAll('#mainTabs .tab');
     tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-    if (inventoryView && eventsView) {
-        if (tab === 'events') {
-            // Save current inventory search term before switching
-            const searchBar = document.querySelector('.search-bar');
-            if (searchBar) inventorySearchTerm = searchBar.value;
-            
+    if (!inventoryView || !eventsView) {
+        return;
+    }
+
+    if (tab === 'events') {
+        // Save current inventory search term before switching
+        const searchBar = document.querySelector('.search-bar');
+        if (searchBar) inventorySearchTerm = searchBar.value;
+
+        resetTabTransitionClasses(inventoryView, eventsView);
+        inventoryView.classList.add('tab-content-hidden');
+
+        (async () => {
+            await wait(TAB_CONTENT_FADE_MS);
+            if (transitionId !== tabTransitionToken) return;
+
+            inventoryView.classList.add('tab-collapsed');
+            await wait(TAB_BOX_TRANSITION_MS);
+            if (transitionId !== tabTransitionToken) return;
+
             inventoryView.style.display = 'none';
+            inventoryView.classList.remove('tab-content-hidden', 'tab-collapsed');
+
             eventsView.style.display = 'flex';
+            eventsView.classList.add('tab-content-hidden');
             updateSearchBar();
             toggleContextMenuItemsForTab('events');
-            
-            // Only load events if not already loaded
+
             if (!eventsLoaded || eventsDirty) {
                 loadEvents();
             }
-        } else {
+
+            await nextFrame();
+            if (transitionId !== tabTransitionToken) return;
+
+            eventsView.classList.remove('tab-content-hidden');
+        })();
+    } else {
+        resetTabTransitionClasses(inventoryView, eventsView);
+        eventsView.classList.add('tab-content-hidden-reverse');
+
+        (async () => {
+            await wait(TAB_CONTENT_FADE_MS);
+            if (transitionId !== tabTransitionToken) return;
+
             eventsView.style.display = 'none';
+            eventsView.classList.remove('tab-content-hidden-reverse');
+
             inventoryView.style.display = 'flex';
+            inventoryView.classList.add('tab-collapsed', 'tab-content-hidden-reverse');
+            inventoryView.getBoundingClientRect();
             updateSearchBar();
             toggleContextMenuItemsForTab('inventory');
-        }
+
+            await nextFrame();
+            await nextFrame();
+            if (transitionId !== tabTransitionToken) return;
+
+            inventoryView.classList.remove('tab-collapsed');
+
+            await wait(TAB_BOX_TRANSITION_MS);
+            if (transitionId !== tabTransitionToken) return;
+
+            inventoryView.classList.remove('tab-content-hidden-reverse');
+        })();
     }
 }
 
@@ -404,7 +466,7 @@ function displayEventProductSelector(products) {
                 <input type="checkbox" id="event-product-${product.id}" onchange="handleEventProductChange(${product.id})">
                 <div>
                     <strong>${product.product_name}</strong>
-                    <div style="font-size: 0.9em; color: #666;">Stock: ${product.amount || 0}</div>
+                    <div style="font-size: 0.9em; color: var(--text-gray);">Stock: ${product.amount || 0}</div>
                 </div>
             </div>
         `;
@@ -513,7 +575,7 @@ function addSelectedEventProduct(product) {
         <div class="selected-event-product-item" id="selected-event-${productId}">
             <div class="selected-event-product-info">
                 <strong>${product.product_name}</strong>
-                <div style="font-size: 0.9em; color: #666;">Stock: ${product.amount || 0}</div>
+                <div style="font-size: 0.9em; color: var(--text-gray);">Stock: ${product.amount || 0}</div>
             </div>
             <div class="selected-event-product-quantity">
                 <input type="number" 

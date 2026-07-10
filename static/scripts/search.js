@@ -768,9 +768,9 @@ function showNoResultsMessage(tbody) {
     const noResultsRow = document.createElement('tr');
     noResultsRow.className = 'no-results-row';
     noResultsRow.innerHTML = `
-        <td colspan="7" style="text-align: center; color: #666; padding: 40px 24px; border-bottom: none;">
-            <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: #666; border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
-            <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+        <td colspan="7" style="text-align: center; color: var(--text-gray); padding: 40px 24px; border-bottom: none;">
+            <h3 style="margin: 0 0 16px 0; padding-bottom: 16px; font-size: 1.5em; color: var(--text-primary); border-bottom: 2px solid var(--loading-accent);">No products match your search</h3>
+            <p style="margin: 0; color: var(--text-gray);">Try adjusting your search terms</p>
         </td>
     `;
     tbody.appendChild(noResultsRow);
@@ -1150,9 +1150,9 @@ function showNoIngredientsMessage(ingredientsList) {
     const noResultsDiv = document.createElement('div');
     noResultsDiv.className = 'no-ingredients-message';
     noResultsDiv.innerHTML = `
-        <div style="text-align: center; color: #666; padding: 40px 24px;">
-            <h3 style="margin: 0 0 16px 0; font-size: 1.5em; color: #666;">No ingredients match your search</h3>
-            <p style="margin: 0; color: #666;">Try adjusting your search terms</p>
+        <div style="text-align: center; color: var(--text-gray); padding: 40px 24px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 1.5em; color: var(--text-primary);">No ingredients match your search</h3>
+            <p style="margin: 0; color: var(--text-gray);">Try adjusting your search terms</p>
         </div>
     `;
     ingredientsList.appendChild(noResultsDiv);

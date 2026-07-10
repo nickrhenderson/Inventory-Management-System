@@ -344,7 +344,7 @@ function displayNoIngredientsMessage(rightContainer, totalContainer) {
  */
 function displayIngredientsError(rightContainer, totalContainer) {
     rightContainer.innerHTML = `
-        <div style="text-align: center; color: #666; padding: 40px 24px;">
+        <div style="text-align: center; color: var(--text-gray); padding: 40px 24px;">
             <h3>Error Loading Ingredients</h3>
             <p>Unable to load ingredients. Please try refreshing the page.</p>
             <button onclick="displayAllIngredients()" style="

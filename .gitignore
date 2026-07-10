@@ -39,6 +39,7 @@ desktop.ini
 *.tmp
 *.temp
 *.log
+*.txt
 
 # PyInstaller specific
 *.manifest

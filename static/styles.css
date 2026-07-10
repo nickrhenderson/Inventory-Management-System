@@ -160,6 +160,9 @@
     --loading-accent: var(--color-primary);
     --loading-gradient-start: var(--color-primary);
     --loading-gradient-end: var(--color-success);
+    --search-glow-color: var(--color-primary);
+    --search-inner-bg: var(--bg-white);
+    --search-glow-blur: 20px;
     --hover-highlight: rgba(0, 123, 255, 0.05);
     --hover-highlight-strong: rgba(0, 123, 255, 0.15);
     --backdrop-overlay: rgba(0, 0, 0, 0.1);
@@ -244,7 +247,7 @@ body {
     align-items: stretch;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .events-container {
@@ -254,6 +257,13 @@ body {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#eventsView .box.left {
+    width: 100%;
 }
 
 #eventsList {
@@ -545,9 +555,115 @@ body {
     right: var(--padding-base);
 }
 
+#themeToggleButton {
+    left: auto;
+    right: calc(var(--padding-base) + var(--button-size) + 20px);
+}
+
+/* Theme switch (sun/moon animation) */
+#themeToggleButton.theme-switch-button {
+    font-size: 0;
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+#themeToggleButton.theme-switch-button:hover,
+#themeToggleButton.theme-switch-button:active {
+    background: transparent;
+}
+
+#themeToggleButton .theme-switch-slider {
+    width: 22px;
+    height: 22px;
+    position: relative;
+    display: inline-block;
+    background-color: #333333;
+    transform: rotateZ(-225deg);
+    transition: 0.3s all;
+    border-radius: 34px;
+}
+
+#themeToggleButton .theme-switch-slider::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transition: 0.3s all;
+}
+
+#themeToggleButton .sun-ray-1,
+#themeToggleButton .sun-ray-2 {
+    transition: 0.3s all;
+}
+
+#themeToggleButton .sun-ray-1::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 10px;
+    height: 2px;
+    width: 4px;
+    background-color: #333333;
+}
+
+#themeToggleButton .sun-ray-1::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 10px;
+    height: 2px;
+    width: 4px;
+    background-color: #333333;
+}
+
+#themeToggleButton .sun-ray-2::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -8px;
+    transform: translateX(-50%);
+    height: 4px;
+    width: 2px;
+    background-color: #333333;
+}
+
+#themeToggleButton .sun-ray-2::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 26px;
+    transform: translateX(-50%);
+    height: 4px;
+    width: 2px;
+    background-color: #333333;
+}
+
+#themeToggleButton[data-theme="dark"] .theme-switch-slider {
+    background-color: #e7eef9;
+    transform: rotateZ(-45deg);
+}
+
+#themeToggleButton[data-theme="dark"] .theme-switch-slider::before {
+    background-color: #0f1218;
+    transform: translateX(10px);
+}
+
+#themeToggleButton[data-theme="dark"] .sun-ray-1,
+#themeToggleButton[data-theme="dark"] .sun-ray-2 {
+    transform: scale(0.1, 0.1);
+    opacity: 0;
+}
+
 .version-button {
     right: var(--padding-base);
     background: var(--gradient-primary);
+
     border: 1px solid var(--border-gray);
     border-radius: var(--border-radius-2xl);
     width: auto;
@@ -783,39 +899,48 @@ body {
 }
 
 .search-container::before {
-  content: '';
-  z-index: -2;
-  text-align: center;
+    content: '';
+    z-index: -2;
+    text-align: center;
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%) rotate(0deg);
-  position: absolute;
+    position: absolute;
 	width: 99999px;
 	height: 99999px;
 	background-repeat: no-repeat;
 	background-position: 0 0;
-  /*border color, change middle color*/
-	background-image: conic-gradient(rgba(0,0,0,0), var(--color-primary), rgba(0,0,0,0) 25%);
-  /* change speed here */
+    /*border color, change middle color*/
+	background-image: conic-gradient(rgba(0,0,0,0), var(--search-glow-color), rgba(0,0,0,0) 25%);
+    /* change speed here */
 	animation: rotate 4s linear infinite;
-  border-radius: 20px;
-  filter: blur(20px);
+    border-radius: 20px;
+    filter: blur(var(--search-glow-blur));
 }
 
 .search-container::after {
-	content: '';
-	position: absolute;
-	z-index: -1;
-  /* border width */
+        content: '';
+        position: absolute;
+        z-index: -1;
+    /* border width */
 	left: 2px;
 	top: 2px;
-  /* double the px from the border width */
+    /* double the px from the border width */
 	width: calc(100% - 4px);
 	height: calc(100% - 4px);
-  /*bg color*/
-	background: white;
-  /*box border radius*/
+    /*bg color*/
+    background: var(--search-inner-bg);
+    /*box border radius*/
 	border-radius: 18px;
+}
+
+.search-bar {
+        position: relative;
+        z-index: 2;
+}
+
+.search-icon {
+        z-index: 2;
 }
 
 @keyframes rotate {
@@ -831,7 +956,7 @@ body {
     box-sizing: border-box;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 .box {
     border-radius: 12px;
@@ -1030,6 +1155,22 @@ body {
     border-radius: 4px;
 }
 
+.box {
+    transition: width 0.32s ease, opacity 0.22s ease, padding 0.32s ease, min-width 0.32s ease, margin 0.32s ease, border-width 0.32s ease;
+}
+.box.left {
+    flex-shrink: 0;
+}
+.box.right {
+    flex-shrink: 0;
+}
+.inventory-container,
+.ingredients-container,
+.ingredients-total-fixed {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
 .amount-button:hover:not(:disabled) {
     transform: scale(1.1);
     background: rgba(0, 0, 0, 0.05);
@@ -1037,12 +1178,90 @@ body {
 
 .amount-button:active:not(:disabled) {
     transform: scale(0.95);
+    transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
 .amount-button:disabled {
     opacity: 0.3;
     cursor: not-allowed;
     transform: none;
+}
+
+#inventoryView.tab-content-hidden .inventory-container,
+#inventoryView.tab-content-hidden .ingredients-container,
+#inventoryView.tab-content-hidden .ingredients-total-fixed,
+#eventsView.tab-content-hidden .events-container {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+#inventoryView.tab-content-hidden-reverse .inventory-container,
+#inventoryView.tab-content-hidden-reverse .ingredients-container,
+#inventoryView.tab-content-hidden-reverse .ingredients-total-fixed,
+#eventsView.tab-content-hidden-reverse .events-container {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+#inventoryView.tab-content-hidden-reverse .inventory-table tbody tr,
+#inventoryView.tab-content-hidden-reverse .inventory-table tbody tr td,
+#inventoryView.tab-content-hidden-reverse .ingredient-item,
+#inventoryView.tab-content-hidden-reverse .ingredient-item *,
+#eventsView.tab-content-hidden-reverse .event-group,
+#eventsView.tab-content-hidden-reverse .event-group * {
+    animation: none !important;
+}
+
+#inventoryView .ingredient-item,
+#eventsView .event-group {
+    transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#eventsView.tab-content-hidden .events-container {
+    transform: translateY(8px);
+}
+
+#inventoryView.tab-collapsed .box.left {
+    width: 100%;
+}
+
+#inventoryView.tab-collapsed .box.right {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    margin-left: 0;
+    opacity: 0;
+    border-width: 0;
+    overflow: hidden;
+}
+
+#inventoryView.tab-collapsed .box.left,
+#inventoryView.tab-collapsed .box.right {
+    transition-timing-function: ease;
+}
+
+#eventsView:not(.tab-content-hidden) .events-container {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#inventoryView:not(.tab-content-hidden) .inventory-container,
+#inventoryView:not(.tab-content-hidden) .ingredients-container,
+#inventoryView:not(.tab-content-hidden) .ingredients-total-fixed {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#inventoryView.tab-content-hidden-reverse .inventory-container,
+#inventoryView.tab-content-hidden-reverse .ingredients-container,
+#inventoryView.tab-content-hidden-reverse .ingredients-total-fixed,
+#inventoryView.tab-content-hidden-reverse .inventory-table tbody tr,
+#inventoryView.tab-content-hidden-reverse .inventory-table tbody tr td,
+#inventoryView.tab-content-hidden-reverse .ingredient-item,
+#eventsView.tab-content-hidden-reverse .events-container,
+#eventsView.tab-content-hidden-reverse .event-group {
+    opacity: 0;
+    transform: translateY(-8px);
 }
 
 .amount-button:disabled:hover {
@@ -2864,18 +3083,12 @@ body {
 }
 
 .group-placeholder {
-    background: linear-gradient(135deg, 
-        rgba(59, 130, 246, 0.1) 25%, 
-        transparent 25%, 
-        transparent 50%, 
-        rgba(59, 130, 246, 0.1) 50%, 
-        rgba(59, 130, 246, 0.1) 75%, 
-        transparent 75%, 
-        transparent);
-    background-size: 20px 20px;
-    border: 2px dashed var(--loading-accent);
-    border-radius: 8px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     margin-bottom: 16px;
+    pointer-events: none;
+    visibility: hidden;
     transition: height 0.2s ease;
 }
 
@@ -3007,4 +3220,367 @@ body {
 
 .ungrouped-products {
     margin-top: 16px;
+}
+
+/* ============================================
+   Dark theme overrides (CSS-variable-based)
+   ============================================ */
+html[data-theme="dark"] {
+    --color-light: #0f1115;
+    --color-lighter: #141821;
+    --color-dark: #0a0c10;
+
+    --bg-primary: var(--color-dark);
+    --bg-white: #0f1218;
+    --bg-light-gray: #141821;
+    --bg-lighter-gray: #181f2a;
+
+    --border-gray: #2a3242;
+    --border-light-gray: #2a3242;
+    --border-table: #262e3d;
+
+    --text-primary: #e7eef9;
+    --text-gray: #aab6c9;
+
+    --loading-border: #1f2736;
+    --search-inner-bg: #0f1218;
+
+    /* Make subtle highlights still visible on dark */
+    --hover-highlight: rgba(102, 179, 255, 0.09);
+    --hover-highlight-strong: rgba(102, 179, 255, 0.18);
+
+    --backdrop-overlay: rgba(0, 0, 0, 0.35);
+
+    /* Search outer glow background base */
+    --button-size: 40px;
+}
+
+html[data-theme="dark"] body {
+    background: var(--bg-primary);
+}
+
+html[data-theme="dark"] .tab {
+    color: #aab6c9;
+    border-color: var(--border-gray);
+    background: linear-gradient(to bottom, #161c26, #0f141f);
+}
+
+html[data-theme="dark"] .tab.active {
+    background: var(--bg-white);
+    color: #ffffff;
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .tab:hover:not(.active) {
+    background: linear-gradient(to bottom, #141a24, #0f141f);
+}
+
+html[data-theme="dark"] .tab.active:hover {
+    background: var(--bg-white);
+}
+
+html[data-theme="dark"] .box,
+html[data-theme="dark"] .box.left,
+html[data-theme="dark"] .box.right {
+    background: var(--bg-white);
+    border-color: var(--border-gray);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+}
+
+html[data-theme="dark"] .inventory-table th,
+html[data-theme="dark"] .inventory-table .amount,
+html[data-theme="dark"] .inventory-table td {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .inventory-table th {
+    background-color: var(--bg-light-gray);
+}
+
+html[data-theme="dark"] .inventory-table tbody tr:hover {
+    background-color: var(--bg-light-gray);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+html[data-theme="dark"] .modal-backdrop {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .settings-panel,
+html[data-theme="dark"] .context-menu {
+    background: var(--bg-white);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .settings-panel,
+html[data-theme="dark"] .context-menu {
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-theme="dark"] select {
+    color: var(--text-primary);
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not(.search-bar),
+html[data-theme="dark"] select {
+    background: var(--bg-light-gray);
+}
+
+html[data-theme="dark"] input::placeholder {
+    color: rgba(170, 182, 201, 0.7);
+}
+
+html[data-theme="dark"] .ingredient-menu,
+html[data-theme="dark"] .ingredient-menu.show {
+    background: var(--bg-white);
+    border-color: var(--border-gray);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .ingredient-menu::before {
+    border-bottom-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .ingredient-menu::after {
+    border-bottom-color: var(--bg-white);
+}
+
+html[data-theme="dark"] .context-menu-divider {
+    background-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .ingredient-menu-item:hover {
+    background-color: rgba(255,255,255,0.06);
+}
+
+html[data-theme="dark"] .ingredient-menu-item {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .ingredient-menu-item.danger:hover {
+    color: #ff8fa0;
+}
+
+html[data-theme="dark"] .context-menu-item:hover,
+html[data-theme="dark"] .ingredient-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .event-group-header,
+html[data-theme="dark"] .product-group-header {
+    background: #1a2230;
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .event-group-header:hover,
+html[data-theme="dark"] .product-group-header:hover {
+    background: #172033;
+}
+
+html[data-theme="dark"] .group-arrow,
+html[data-theme="dark"] .group-name {
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .tab {
+    background: linear-gradient(to bottom, #141a24, #0f141f);
+    color: #c9d4e4;
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .tab.active {
+    color: #ffffff;
+    background: var(--bg-white);
+}
+
+html[data-theme="dark"] .tab:hover:not(.active) {
+    background: linear-gradient(to bottom, #172030, #121926);
+}
+
+html[data-theme="dark"] .tab.active:hover {
+    background: var(--bg-white);
+}
+
+html[data-theme="dark"] .group-drag-handle:hover,
+html[data-theme="dark"] .group-action-btn:hover,
+html[data-theme="dark"] .ingredient-menu-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .ingredient-menu-button.active {
+    background: rgba(102, 179, 255, 0.16);
+}
+
+html[data-theme="dark"] .drag-dots {
+    background-image: radial-gradient(circle, #c7d1e1 1.5px, transparent 1.5px);
+    opacity: 0.7;
+}
+
+html[data-theme="dark"] .group-count,
+html[data-theme="dark"] .empty-group-message {
+    color: #aab6c9;
+}
+
+html[data-theme="dark"] .modal-button.submit:disabled {
+    background: var(--border-gray) !important;
+}
+
+html[data-theme="dark"] .confirmation-modal-button.cancel:disabled {
+    background: #263040 !important;
+    color: #9aa7bb !important;
+}
+
+html[data-theme="dark"] .barcode-display-container .barcode-display {
+    background: var(--bg-white);
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .upc-bar {
+    background: #ffffff;
+}
+
+/* ============================================
+   SVG Icon White Adjustments
+   ============================================ */
+
+/* Settings cog and refresh button icons */
+html[data-theme="dark"] .settings-button svg,
+html[data-theme="dark"] .refresh-button svg {
+    color: #ffffff;
+}
+
+/* Settings cog and refresh button icons on hover */
+html[data-theme="dark"] .settings-button:hover svg,
+html[data-theme="dark"] .refresh-button:hover svg {
+    color: #e7eef9;
+}
+
+/* Plus button stroke icons */
+html[data-theme="dark"] .plus-icon svg {
+    stroke: #ffffff;
+}
+html[data-theme="dark"] .box-add-button:hover .plus-icon svg {
+    stroke: #e7eef9;
+}
+
+/* Flag button fill icons */
+html[data-theme="dark"] .flag-icon svg {
+    fill: #ffffff;
+}
+html[data-theme="dark"] .ingredient-flag-button:hover .flag-icon svg {
+    fill: #e7eef9;
+}
+
+/* Ensure flagged items retain their distinct look if needed */
+html[data-theme="dark"] .ingredient-flag-button.flagged .flag-icon svg {
+    fill: #ff4444;
+}
+
+html[data-theme="dark"] .search-icon img,
+html[data-theme="dark"] .dots-icon,
+html[data-theme="dark"] img.menu-icon,
+html[data-theme="dark"] .context-menu-item img,
+html[data-theme="dark"] .group-action-btn img,
+html[data-theme="dark"] .amount-button .amount-icon img,
+html[data-theme="dark"] .edit-icon img,
+html[data-theme="dark"] .delete-icon img,
+html[data-theme="dark"] .param-title-icon img {
+    filter: brightness(0) invert(1);
+}
+
+html[data-theme="dark"] .ingredient-menu-item img.menu-icon,
+html[data-theme="dark"] .ingredient-menu-item:hover img.menu-icon,
+html[data-theme="dark"] .ingredient-menu-item.danger img.menu-icon,
+html[data-theme="dark"] .ingredient-menu-item.danger:hover img.menu-icon {
+    filter: brightness(0) invert(1);
+}
+
+html[data-theme="dark"] .context-menu-item:hover .menu-icon,
+html[data-theme="dark"] .ingredient-menu-item:hover .menu-icon,
+html[data-theme="dark"] .ingredient-menu-item.danger:hover .menu-icon,
+html[data-theme="dark"] .amount-button:hover:not(:disabled) .amount-icon img,
+html[data-theme="dark"] .ingredient-menu-button:hover .dots-icon,
+html[data-theme="dark"] .ingredient-menu-button.active .dots-icon,
+html[data-theme="dark"] .product-edit-button:hover .edit-icon img,
+html[data-theme="dark"] .product-delete-button:hover .delete-icon img {
+    filter: brightness(0) invert(1) opacity(1);
+}
+
+html[data-theme="dark"] .amount-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .product-edit-button:hover {
+    background: rgba(102, 179, 255, 0.18);
+}
+
+html[data-theme="dark"] .product-delete-button:hover {
+    background: rgba(255, 107, 107, 0.18);
+}
+
+html[data-theme="dark"] .amount-input,
+html[data-theme="dark"] .selected-event-product-quantity input,
+html[data-theme="dark"] .selected-ingredient-quantity input {
+    background: var(--bg-light-gray);
+    color: var(--text-primary);
+    border-color: var(--border-gray);
+}
+
+html[data-theme="dark"] .amount-input:focus,
+html[data-theme="dark"] .selected-event-product-quantity input:focus,
+html[data-theme="dark"] .selected-ingredient-quantity input:focus {
+    background: var(--bg-light-gray);
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 2px rgba(102, 179, 255, 0.25);
+}
+
+html[data-theme="dark"] .ingredient-menu-item .flag-icon.menu-icon svg {
+    fill: #ffffff;
+}
+
+html[data-theme="dark"] .search-icon img {
+    opacity: 0.75;
+}
+
+/* ============================================
+   Dark Mode Scrollbar Adaptations
+   ============================================ */
+html[data-theme="dark"] {
+    /* Modern standard properties for Firefox */
+    scrollbar-color: rgba(255, 255, 255, 0.2) var(--bg-white);
+}
+
+/* Chrome, Edge, Safari, and Opera overrides */
+html[data-theme="dark"] ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--bg-white);
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Explicitly target the creation-modal from styles.css */
+html[data-theme="dark"] .creation-modal {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+html[data-theme="dark"] .creation-modal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+html[data-theme="dark"] .creation-modal::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
 }

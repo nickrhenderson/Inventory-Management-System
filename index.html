@@ -7,6 +7,19 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Inventory System</title>
+    <script>
+        (function () {
+            try {
+                var saved = window.localStorage && window.localStorage.getItem('inventory_theme');
+                var theme = saved === 'dark' || saved === 'light'
+                    ? saved
+                    : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                document.documentElement.dataset.theme = theme;
+            } catch (error) {
+                document.documentElement.dataset.theme = 'light';
+            }
+        })();
+    </script>
     <style>
         /* Critical styles to prevent FOUC - must be inline and first */
         /* Prevent scroll while loading */
@@ -21,7 +34,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #f0f0f0;
+            background: var(--bg-primary, #f0f0f0);
             z-index: 99999;
             display: flex;
             align-items: center;
@@ -40,15 +53,15 @@
         .loading-spinner {
             width: 50px;
             height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #007acc;
+            border: 5px solid var(--bg-light-gray, #f3f3f3);
+            border-top: 5px solid var(--loading-accent, #007acc);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
         
         .loading-text {
-            color: #666;
+            color: var(--text-gray, #666);
             font-size: 18px;
             font-weight: 500;
         }
@@ -88,6 +101,7 @@
         }
     </style>
     <link rel="stylesheet" href="static/styles.css">
+    <script src="static/theme.js" defer></script>
     <script src="static/main.js" defer></script>
     <script>
         const pageLoadStart = Date.now();
@@ -218,6 +232,12 @@
                 <img src="static/img/svg/magnifyglass.svg" alt="Search" />
             </div>
         </div>
+            <button class="top-bar-button theme-switch-button" title="Toggle Theme" id="themeToggleButton" aria-label="Toggle theme" type="button">
+                <span class="theme-switch-slider round" aria-hidden="true">
+                    <span class="sun-ray-1"></span>
+                    <span class="sun-ray-2"></span>
+                </span>
+            </button>
         <button class="top-bar-button version-button" title="Version" id="versionButton">
             v0.3.3
         </button>
@@ -252,11 +272,6 @@
             <section class="box left">
                 <div class="events-container">
                     <div id="eventsList"></div>
-                </div>
-            </section>
-            <section class="box right">
-                <div class="events-detail-placeholder">
-                    <p>Event details will appear here.</p>
                 </div>
             </section>
         </div>
