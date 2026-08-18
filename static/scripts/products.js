@@ -323,7 +323,7 @@ function createProductsTableHTML() {
                     <th>Product Name</th>
                     <th>Batch</th>
                     <th>Date Mixed</th>
-                    <th>Total Cost</th>
+                    <th>Unit Cost</th>
                     <th>Quantity</th>
                     <th>Amount</th>
                     <th>Actions</th>

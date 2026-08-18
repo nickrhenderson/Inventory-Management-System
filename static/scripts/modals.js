@@ -29,15 +29,17 @@ async function openProductModal(productData = null, isEditMode = false) {
             const cancelButton = document.querySelector('#productModal .modal-button.cancel');
             
             if (isEditMode && productData) {
-                modalTitle.textContent = 'Edit Product';
-                submitButton.textContent = 'Update Product';
+                modalTitle.textContent = 'Edit Unit';
+                submitButton.textContent = 'Update Unit';
+                setUnitCountFieldsForMode(true);
                 // Store edit data for form submission
                 window.editingProductData = productData;
                 // Populate form with existing data AFTER ingredients are loaded
                 await populateProductForm(productData);
             } else {
-                modalTitle.textContent = 'Add New Product';
-                submitButton.textContent = 'Add Product';
+                modalTitle.textContent = 'Add New Unit';
+                submitButton.textContent = 'Add Unit';
+                setUnitCountFieldsForMode(false);
                 window.editingProductData = null;
                 // Clear any existing ingredient data
                 window.editingProductIngredients = null;
@@ -46,6 +48,7 @@ async function openProductModal(productData = null, isEditMode = false) {
                 document.getElementById('mixedDate').value = today;
                 // Set default amount to 1 for new products
                 document.getElementById('productAmount').value = 1;
+                document.getElementById('originalProductAmount').value = 1;
             }
             
             // Restore buttons in case they were hidden from previous use
@@ -66,10 +69,28 @@ async function openProductModal(productData = null, isEditMode = false) {
     } catch (error) {
         console.error('Error opening product modal:', error);
         if (window.notifyError) {
-            window.notifyError('Failed to load ingredients for product creation.');
+            window.notifyError('Failed to load ingredients for unit creation.');
         } else {
-            alert('Failed to load ingredients for product creation.');
+            alert('Failed to load ingredients for unit creation.');
         }
+    }
+}
+
+function setUnitCountFieldsForMode(isEditMode) {
+    const currentField = document.getElementById('currentProductAmountField');
+    const originalLabel = document.getElementById('originalProductAmountLabel');
+    const countFields = currentField ? currentField.closest('.product-count-fields') : null;
+
+    if (currentField) {
+        currentField.hidden = !isEditMode;
+    }
+    if (countFields) {
+        countFields.classList.toggle('creation-mode', !isEditMode);
+    }
+    if (originalLabel) {
+        originalLabel.textContent = isEditMode
+            ? 'Original Number of Units Produced:'
+            : 'Number of Units Produced:';
     }
 }
 
@@ -161,6 +182,7 @@ async function populateProductForm(productData) {
     
     // Fill amount field
     document.getElementById('productAmount').value = productData.amount || 0;
+    document.getElementById('originalProductAmount').value = productData.original_amount || Math.max(productData.amount || 0, 1);
     
     // Allow editing of both product name and mixed date in edit mode
     document.getElementById('productName').readOnly = false;
@@ -441,7 +463,7 @@ function resetProductForm() {
     // Reset submit button
     const submitButton = document.getElementById('submitProductButton');
     if (submitButton) {
-        submitButton.textContent = 'Add Product';
+        submitButton.textContent = 'Add Unit';
         submitButton.className = 'modal-button submit';
         submitButton.disabled = false;
     }
@@ -449,7 +471,7 @@ function resetProductForm() {
     // Reset modal title
     const modalTitle = document.querySelector('#productModal h3');
     if (modalTitle) {
-        modalTitle.textContent = 'Add New Product';
+        modalTitle.textContent = 'Add New Unit';
     }
     
     // Reset form field states
@@ -770,7 +792,7 @@ async function handleProductSubmission(event) {
         
         // Always reset button state on any error, including validation errors
         submitButton.disabled = false;
-        submitButton.textContent = isEditMode ? 'Update Product' : 'Add Product';
+        submitButton.textContent = isEditMode ? 'Update Unit' : 'Add Unit';
         submitButton.className = 'modal-button submit';
         
         if (isEditMode) {
@@ -790,15 +812,29 @@ async function handleProductSubmission(event) {
 function collectProductFormData() {
     const productName = document.getElementById('productName').value.trim();
     const mixedDate = document.getElementById('mixedDate').value;
-    const amount = parseInt(document.getElementById('productAmount').value) || 0;
+    const isEditMode = window.editingProductData !== null;
+    let amount = parseInt(document.getElementById('productAmount').value) || 0;
+    const originalAmount = parseInt(document.getElementById('originalProductAmount').value) || 0;
+
+    if (!isEditMode) {
+        amount = originalAmount;
+    }
     
     console.log('Product name:', productName);
     console.log('Mixed date:', mixedDate);
-    console.log('Amount:', amount);
+    console.log('Current amount:', amount, 'Original amount:', originalAmount);
     
     // Validate amount
     if (amount < 0) {
-        throw new Error('Number of batches cannot be negative');
+        throw new Error('Current number of units cannot be negative');
+    }
+
+    if (originalAmount < 1) {
+        throw new Error('Original number of units produced must be at least 1');
+    }
+
+    if (amount > originalAmount) {
+        throw new Error('Current number of units cannot exceed the original number of units produced');
     }
     
     // Collect selected ingredients with quantities
@@ -847,6 +883,7 @@ function collectProductFormData() {
         product_name: productName,
         mixed_date: mixedDate,
         amount: amount,
+        original_amount: originalAmount,
         ingredients: selectedIngredients,
         group_id: selectedGroupId ? parseInt(selectedGroupId) : null,
         parameter_values: parameterValues
@@ -872,7 +909,7 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
     // Show success message without animation
     barcodeResult.innerHTML = `
         <div style="color: #4caf50; font-weight: 600;">${SUCCESS_MESSAGES.PRODUCT_CREATED}</div>
-        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been added to your inventory.</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Unit "${productName}" has been added to your inventory.</div>
     `;
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';
@@ -951,8 +988,8 @@ function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
     
     // Show success message without animation
     barcodeResult.innerHTML = `
-        <div style="color: #4caf50; font-weight: 600;">Product Updated Successfully</div>
-        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Product "${productName}" has been updated.</div>
+        <div style="color: #4caf50; font-weight: 600;">Unit Updated Successfully</div>
+        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Unit "${productName}" has been updated.</div>
     `;
     barcodeResult.className = 'barcode-result success show';
     barcodeResult.style.display = 'block';

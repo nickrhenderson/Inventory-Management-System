@@ -5,9 +5,7 @@
     const saved = window.localStorage && window.localStorage.getItem(STORAGE_KEY);
     if (saved === 'light' || saved === 'dark') return saved;
 
-    // Fall back to OS preference.
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return prefersDark ? 'dark' : 'light';
+    return 'light';
   }
 
   function applyTheme(theme) {
@@ -35,6 +33,7 @@
       const next = current === 'dark' ? 'light' : 'dark';
 
       window.localStorage && window.localStorage.setItem(STORAGE_KEY, next);
+      saveThemeSetting(next);
       applyTheme(next);
       setButtonUI(next);
 
@@ -43,11 +42,41 @@
     });
   }
 
+  async function saveThemeSetting(theme) {
+    try {
+      if (window.pywebview && window.pywebview.api) {
+        await window.pywebview.api.set_theme_setting(theme);
+      }
+    } catch (error) {
+      console.error('Failed to save theme setting:', error);
+    }
+  }
+
+  async function syncThemeSetting() {
+    try {
+      if (!window.pywebview || !window.pywebview.api) return;
+
+      const response = await window.pywebview.api.get_theme_setting();
+      const savedTheme = response && response.success ? response.theme : null;
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        window.localStorage && window.localStorage.setItem(STORAGE_KEY, savedTheme);
+        applyTheme(savedTheme);
+        setButtonUI(savedTheme);
+      } else {
+        await saveThemeSetting(getPreferredTheme());
+      }
+    } catch (error) {
+      console.error('Failed to load theme setting:', error);
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     const initial = getPreferredTheme();
     applyTheme(initial);
     setButtonUI(initial);
     initThemeToggle();
   });
+
+  window.addEventListener('app:initialized', syncThemeSetting);
 })();
 

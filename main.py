@@ -8,9 +8,11 @@ import subprocess
 import shutil
 import time
 from database import DatabaseManager, get_data_path
+from google_drive_backup import GoogleDriveBackupService
+from settings import SettingsManager
 
 # Application version
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.8.0"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -26,6 +28,8 @@ except ImportError:
 class InventoryAPI:
 	def __init__(self):
 		self.db_manager = DatabaseManager(APP_VERSION)
+		self.settings = SettingsManager(get_data_path())
+		self.google_drive = GoogleDriveBackupService(self.db_manager, get_data_path())
 	
 	def _success_response(self, message, **kwargs):
 		"""Create a standardized success response"""
@@ -190,6 +194,57 @@ class InventoryAPI:
 	def get_inventory_events(self, limit=200):
 		"""Return inventory events newest-first."""
 		return self.db_manager.get_inventory_events(limit)
+
+	def get_google_drive_status(self):
+		"""Return the current Google Drive connection state."""
+		return self.google_drive.get_status()
+
+	def connect_google_drive(self):
+		"""Link the app to a Google account and store Drive credentials."""
+		return self.google_drive.connect()
+
+	def disconnect_google_drive(self):
+		"""Remove the stored Google Drive credentials."""
+		return self.google_drive.disconnect()
+
+	def backup_database_to_google_drive(self):
+		"""Upload a consistent snapshot of the local database to Google Drive."""
+		return self.google_drive.backup_database()
+
+	def get_database_revision(self):
+		"""Return a marker used to detect committed database changes."""
+		return self._success_response("Database revision retrieved", revision=self.db_manager.get_database_revision())
+
+	def get_theme_setting(self):
+		"""Return the saved light or dark theme preference."""
+		theme = self.settings.get("theme")
+		return self._success_response("Theme setting retrieved", theme=theme if theme in ("light", "dark") else None)
+
+	def set_theme_setting(self, theme):
+		"""Persist a valid theme preference for future application launches."""
+		if theme not in ("light", "dark"):
+			return self._error_response("Theme must be light or dark")
+		self.settings.set("theme", theme)
+		return self._success_response("Theme setting saved", theme=theme)
+
+	def get_google_drive_auto_backup_setting(self):
+		"""Return whether automatic Google Drive backups are enabled."""
+		enabled = self.settings.get("google_drive_auto_backup")
+		return self._success_response(
+			"Google Drive auto-backup setting retrieved",
+			enabled=enabled if isinstance(enabled, bool) else None
+		)
+
+	def set_google_drive_auto_backup_setting(self, enabled):
+		"""Persist the automatic Google Drive backup preference."""
+		if not isinstance(enabled, bool):
+			return self._error_response("Auto-backup setting must be true or false")
+		self.settings.set("google_drive_auto_backup", enabled)
+		return self._success_response("Google Drive auto-backup setting saved", enabled=enabled)
+
+	def download_latest_google_drive_backup(self):
+		"""Download and restore the latest Google Drive backup."""
+		return self.google_drive.download_latest_backup()
 
 	def add_inventory_events(self, events, title=None, event_date=None):
 		"""Add inventory events with validation (no over-removal)."""
@@ -384,7 +439,7 @@ def main():
 	# Get the HTML file URL
 	html_url = get_html_file_url(html_file)
 	
-	webview.create_window(
+	window = webview.create_window(
 		"Bad-Bandit IMS",
 		url=html_url,
 		width=1200,

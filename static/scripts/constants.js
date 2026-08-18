@@ -77,6 +77,6 @@ const ERROR_MESSAGES = {
 
 // Success messages
 const SUCCESS_MESSAGES = {
-    PRODUCT_CREATED: 'Product Created Successfully!',
+    PRODUCT_CREATED: 'Unit Created Successfully!',
     INGREDIENT_CREATED: '✓ Ingredient Created Successfully!'
 };

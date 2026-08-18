@@ -47,6 +47,7 @@ class DatabaseManager:
 				('total_quantity', 'REAL DEFAULT 0.0'),
 				('total_cost', 'REAL DEFAULT 0.0'),
 				('amount', 'INTEGER DEFAULT 0'),
+				('original_amount', 'INTEGER DEFAULT 1'),
 				('notes', 'TEXT'),
 				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
 			],
@@ -134,7 +135,75 @@ class DatabaseManager:
 			""",
 			(product_id, delta, title or "Inventory change", event_date_value)
 		)
-	
+
+	def get_database_path(self):
+		"""Return the current on-disk database path."""
+		return self.db_path
+
+	def get_database_revision(self):
+		"""Return a lightweight marker that changes when the database file is committed."""
+		try:
+			stat_result = os.stat(self.db_path)
+			return f"{stat_result.st_mtime_ns}:{stat_result.st_size}"
+		except OSError:
+			return None
+
+	def create_database_snapshot(self, snapshot_path):
+		"""Write a consistent copy of the current database to snapshot_path."""
+		try:
+			os.makedirs(os.path.dirname(snapshot_path), exist_ok=True)
+			snapshot_bytes = self.create_database_snapshot_bytes()
+			with open(snapshot_path, "wb") as snapshot_file:
+				snapshot_file.write(snapshot_bytes)
+			return self._success_response("Database snapshot created", snapshot_path=snapshot_path)
+		except Exception as e:
+			return self._error_response(e)
+
+	def create_database_snapshot_bytes(self):
+		"""Return a binary SQLite snapshot of the current database without using a temp file."""
+		with self._get_db_connection() as source_conn:
+			memory_conn = sqlite3.connect(":memory:")
+			try:
+				source_conn.backup(memory_conn)
+				if hasattr(memory_conn, "serialize"):
+					return memory_conn.serialize()
+				raise RuntimeError("SQLite serialization is not available in this Python build")
+			finally:
+				memory_conn.close()
+
+	def restore_database_from_snapshot(self, snapshot_path):
+		"""Replace the current local database contents with a snapshot file."""
+		try:
+			if not os.path.exists(snapshot_path):
+				return self._error_response("Snapshot file not found")
+
+			with open(snapshot_path, "rb") as snapshot_file:
+				return self.restore_database_from_snapshot_bytes(snapshot_file.read())
+
+		except Exception as e:
+			return self._error_response(e)
+
+	def restore_database_from_snapshot_bytes(self, snapshot_bytes):
+		"""Replace the current database contents with an in-memory SQLite snapshot."""
+		try:
+			memory_conn = sqlite3.connect(":memory:")
+			try:
+				if hasattr(memory_conn, "deserialize"):
+					memory_conn.deserialize(snapshot_bytes)
+				else:
+					raise RuntimeError("SQLite deserialization is not available in this Python build")
+
+				with self._get_db_connection() as target_conn:
+					memory_conn.backup(target_conn)
+			finally:
+				memory_conn.close()
+
+			# Re-run initialization so any missing indexes are restored.
+			self.init_database()
+			return self._success_response("Database restored successfully")
+		except Exception as e:
+			return self._error_response(e)
+		
 	def generate_barcode_id(self, prefix="", length=12):
 		"""Generate a barcode-compatible unique ID"""
 		return self.barcode_manager.generate_barcode_id(prefix, length)
@@ -172,6 +241,18 @@ class DatabaseManager:
 		
 		db_path = os.path.join(data_dir, "inventory.db")
 		
+		# Existing products stored total_cost for an entire batch. Convert it once
+		# when the original production count column is introduced.
+		needs_cost_per_product_migration = False
+		if os.path.exists(db_path):
+			with sqlite3.connect(db_path) as migration_check_conn:
+				products_table = migration_check_conn.execute(
+					"SELECT name FROM sqlite_master WHERE type='table' AND name='products'"
+				).fetchone()
+				if products_table:
+					product_columns = {row[1] for row in migration_check_conn.execute("PRAGMA table_info(products)")}
+					needs_cost_per_product_migration = "original_amount" not in product_columns
+
 		# Initialize database and create/migrate tables dynamically
 		with sqlite3.connect(db_path) as conn:
 			# Drop old inventory table if it exists (legacy)
@@ -180,6 +261,13 @@ class DatabaseManager:
 			# Migrate all tables to match expected schema
 			for table_name, expected_columns in self.expected_schema.items():
 				self._migrate_table_schema(conn, table_name, expected_columns)
+
+			if needs_cost_per_product_migration:
+				conn.execute("""
+					UPDATE products
+					SET original_amount = CASE WHEN amount > 0 THEN amount ELSE 1 END
+				""")
+				conn.execute("UPDATE products SET total_cost = total_cost / original_amount")
 			
 			# Create indexes for better performance
 			self._create_indexes(conn)
@@ -494,7 +582,7 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, amount, notes
+				       total_quantity, total_cost, amount, original_amount, notes
 				FROM products 
 				WHERE id = ?
 			''', (product_id,))
@@ -532,13 +620,20 @@ class DatabaseManager:
 				if not existing_product:
 					return self._error_response("Product not found")
 				
-				# Update product basic info (allow name, mixed date, and amount changes)
+				# Update product basic info (allow name, mixed date, and counts to change)
 				amount = int(product_data.get('amount', 0))
+				original_amount = int(product_data.get('original_amount', 0))
+				if amount < 0:
+					return self._error_response("Current number of products cannot be negative")
+				if original_amount < 1:
+					return self._error_response("Original number of products produced must be at least 1")
+				if amount > original_amount:
+					return self._error_response("Current number of products cannot exceed the original number of products produced")
 				conn.execute('''
 					UPDATE products 
-					SET product_name = ?, date_mixed = ?, amount = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
+					SET product_name = ?, date_mixed = ?, amount = ?, original_amount = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
 					WHERE id = ?
-				''', (product_data['product_name'], mixed_date, amount, "Updated via product edit modal", product_id))
+				''', (product_data['product_name'], mixed_date, amount, original_amount, "Updated via product edit modal", product_id))
 				
 				# Delete existing product-ingredient relationships
 				conn.execute('DELETE FROM product_ingredients WHERE product_id = ?', (product_id,))
@@ -574,7 +669,7 @@ class DatabaseManager:
 				# Update product totals
 				conn.execute('''
 					UPDATE products SET total_quantity = ?, total_cost = ? WHERE id = ?
-				''', (total_quantity, total_cost, product_id))
+				''', (total_quantity, total_cost / original_amount, product_id))
 				
 				conn.commit()
 				
@@ -588,12 +683,15 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# Get current amount
-				current_product = conn.execute('SELECT amount FROM products WHERE id = ?', (product_id,)).fetchone()
+				current_product = conn.execute('SELECT amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not current_product:
 					return self._error_response("Product not found")
 				
 				current_amount = current_product[0] or 0
+				original_amount = current_product[1] or 1
 				new_amount = max(0, current_amount + delta)  # Prevent negative amounts
+				if new_amount > original_amount:
+					return self._error_response("Current number of products cannot exceed the original number of products produced")
 				
 				# Update the amount
 				conn.execute('''
@@ -618,13 +716,16 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# Verify product exists
-				existing_product = conn.execute('SELECT id, amount FROM products WHERE id = ?', (product_id,)).fetchone()
+				existing_product = conn.execute('SELECT id, amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not existing_product:
 					return self._error_response("Product not found")
 				
 				# Ensure amount is non-negative
 				amount = max(0, int(new_amount))
 				current_amount = existing_product[1] or 0
+				original_amount = existing_product[2] or 1
+				if amount > original_amount:
+					return self._error_response("Current number of products cannot exceed the original number of products produced")
 				
 				# Update the amount
 				conn.execute('''
@@ -716,17 +817,25 @@ class DatabaseManager:
 			with self._get_db_connection() as conn:
 				mixed_date = self._parse_date(product_data['mixed_date'], datetime.now().date())
 				amount = int(product_data.get('amount', 0))
+				original_amount = int(product_data.get('original_amount', 0))
+				if amount < 0:
+					return self._error_response("Current number of products cannot be negative")
+				if original_amount < 1:
+					return self._error_response("Original number of products produced must be at least 1")
+				if amount > original_amount:
+					return self._error_response("Current number of products cannot exceed the original number of products produced")
 				
 				# Insert product
 				cursor = conn.execute('''
-					INSERT INTO products (barcode_id, product_name, batch_number, date_mixed, amount, notes)
-					VALUES (?, ?, ?, ?, ?, ?)
+					INSERT INTO products (barcode_id, product_name, batch_number, date_mixed, amount, original_amount, notes)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
 				''', (
 					self.generate_product_barcode(),
 					product_data['product_name'],
 					self.generate_batch_number(),
 					mixed_date,
 					amount,
+					original_amount,
 					"Created via product creation modal"
 				))
 				
@@ -762,7 +871,7 @@ class DatabaseManager:
 				# Update product totals
 				conn.execute('''
 					UPDATE products SET total_quantity = ?, total_cost = ? WHERE id = ?
-				''', (total_quantity, total_cost, product_id))
+				''', (total_quantity, total_cost / original_amount, product_id))
 				self._log_inventory_event(conn, product_id, amount, "Product created", mixed_date)
 				
 				conn.commit()
@@ -804,13 +913,16 @@ class DatabaseManager:
 					delta = int(entry.get('delta', 0))
 					if not product_id or delta == 0:
 						continue
-					current_row = conn.execute('SELECT amount FROM products WHERE id = ?', (product_id,)).fetchone()
+					current_row = conn.execute('SELECT amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 					if not current_row:
 						raise Exception(f"Product {product_id} not found")
 					current_amount = current_row[0] or 0
+					original_amount = current_row[1] or 1
 					if delta < 0 and current_amount + delta < 0:
 						raise Exception(f"Cannot remove more than in stock for product {product_id}")
 					new_amount = current_amount + delta
+					if new_amount > original_amount:
+						raise Exception(f"Cannot add more than the original number of products produced for product {product_id}")
 					conn.execute(
 						"UPDATE products SET amount = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?",
 						(new_amount, product_id)

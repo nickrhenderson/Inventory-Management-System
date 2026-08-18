@@ -13,7 +13,7 @@
                 var saved = window.localStorage && window.localStorage.getItem('inventory_theme');
                 var theme = saved === 'dark' || saved === 'light'
                     ? saved
-                    : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                    : 'light';
                 document.documentElement.dataset.theme = theme;
             } catch (error) {
                 document.documentElement.dataset.theme = 'light';
@@ -232,6 +232,9 @@
                 <img src="static/img/svg/magnifyglass.svg" alt="Search" />
             </div>
         </div>
+            <button class="top-bar-button drive-button" title="Google Drive Backup" id="googleDriveButton" aria-label="Google Drive backup" aria-haspopup="menu" type="button">
+                <img src="static/img/svg/database.svg" alt="Google Drive backup" class="drive-button-icon" />
+            </button>
             <button class="top-bar-button theme-switch-button" title="Toggle Theme" id="themeToggleButton" aria-label="Toggle theme" type="button">
                 <span class="theme-switch-slider round" aria-hidden="true">
                     <span class="sun-ray-1"></span>
@@ -241,6 +244,33 @@
         <button class="top-bar-button version-button" title="Version" id="versionButton">
             v0.3.3
         </button>
+        <div id="googleDriveMenu" class="google-drive-menu" role="menu" aria-hidden="true">
+            <div class="google-drive-menu-item">
+                <button type="button" class="google-drive-menu-action" data-drive-action="backup" role="menuitem">
+                <span class="google-drive-menu-item-main">
+                    <img src="static/img/svg/upload.svg" alt="Backup" class="menu-icon" />
+                    <span>Backup</span>
+                </span>
+                </button>
+                <label class="google-drive-auto-backup" title="Automatically back up 60 seconds after the latest database change">
+                    <span>Auto</span>
+                    <input id="googleDriveAutoBackup" type="checkbox" aria-label="Automatically back up database changes" />
+                    <span class="google-drive-auto-backup-indicator" aria-hidden="true"></span>
+                </label>
+            </div>
+            <button type="button" class="google-drive-menu-item" data-drive-action="download" role="menuitem">
+                <span class="google-drive-menu-item-main">
+                    <img src="static/img/svg/download.svg" alt="Download" class="menu-icon" />
+                    <span>Download</span>
+                </span>
+                <span class="google-drive-menu-item-meta" data-drive-meta="download">No backup yet</span>
+            </button>
+            <button type="button" class="google-drive-menu-item google-drive-sign-out" data-drive-action="sign-out" role="menuitem">
+                <span class="google-drive-menu-item-main">
+                    <span>Sign out</span>
+                </span>
+            </button>
+        </div>
     </header>
 
     <!-- Tabs -->
@@ -309,19 +339,25 @@
     <div class="modal-backdrop creation-modal-backdrop" id="productModalBackdrop" onclick="closeProductModal()">
         <div class="modal-content creation-modal" id="productModal" onclick="event.stopPropagation()">
             <button class="modal-close-button" onclick="closeProductModal()" title="Close">×</button>
-            <h3>Add Product</h3>
+            <h3>Add Unit</h3>
             <form id="productForm">
                 <div class="form-group">
-                    <label for="productName">Product Name:</label>
+                    <label for="productName">Unit Name:</label>
                     <input type="text" id="productName" name="productName" required autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label for="mixedDate">Mixed Date:</label>
                     <input type="date" id="mixedDate" name="mixedDate" required>
                 </div>
-                <div class="form-group">
-                    <label for="productAmount">Number of Batches Produced:</label>
-                    <input type="number" id="productAmount" name="productAmount" min="0" step="1" value="1" required>
+                <div class="form-group product-count-fields">
+                    <div id="currentProductAmountField">
+                        <label for="productAmount">Current Number of Units:</label>
+                        <input type="number" id="productAmount" name="productAmount" min="0" step="1" value="1" required>
+                    </div>
+                    <div id="originalProductAmountField">
+                        <label for="originalProductAmount" id="originalProductAmountLabel">Original Number of Units Produced:</label>
+                        <input type="number" id="originalProductAmount" name="originalProductAmount" min="1" step="1" value="1" required>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="productGroup">Assign to Group:</label>
@@ -346,7 +382,7 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" class="modal-button cancel" onclick="closeProductModal()">Cancel</button>
-                    <button type="submit" class="modal-button submit" id="submitProductButton">Add Product</button>
+                    <button type="submit" class="modal-button submit" id="submitProductButton">Add Unit</button>
                 </div>
             </form>
             <div class="barcode-result" id="barcodeResult" style="display: none;"></div>

@@ -9,6 +9,10 @@ async function initializeApp() {
     if (searchBar) {
         searchBar.value = '';
     }
+
+    if (typeof initializeGoogleDriveControls === 'function') {
+        initializeGoogleDriveControls();
+    }
     
     // Initialize context menu functionality
     initializeContextMenu();

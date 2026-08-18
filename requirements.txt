@@ -11,6 +11,11 @@ Pillow>=8.0.0
 # HTTP requests for update functionality
 requests>=2.25.0
 
+# Google Drive backup support
+google-api-python-client>=2.120.0
+google-auth>=2.28.0
+google-auth-oauthlib>=1.2.0
+
 # Note: The following modules are part of Python's standard library and don't need to be installed:
 # - os (operating system interface)
 # - sqlite3 (SQLite database)

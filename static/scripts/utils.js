@@ -199,6 +199,169 @@ function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm,
     }, 10);
 }
 
+    /**
+     * Show a themed information modal
+     * @param {string} title - Modal title
+     * @param {string} message - Modal message
+     * @param {string} buttonText - Button label
+     * @param {Function} onClose - Callback function on close (optional)
+     */
+    function showInfoModal(title, message, buttonText = 'OK', onClose) {
+        const existingModal = document.querySelector('.info-modal-backdrop');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modalHTML = `
+            <div class="modal-backdrop info-modal-backdrop" id="infoModal" onclick="hideInfoModal()">
+                <div class="modal-content info-modal" onclick="event.stopPropagation()">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="info-modal-buttons">
+                        <button class="modal-button submit" onclick="hideInfoModal()">
+                            ${buttonText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        window.currentInfoModalAction = onClose;
+
+        setTimeout(() => {
+            const modal = document.getElementById('infoModal');
+            if (modal) {
+                modal.classList.add('open');
+            }
+        }, 10);
+    }
+
+    /**
+     * Hide information modal
+     */
+    function hideInfoModal() {
+        const modal = document.getElementById('infoModal');
+        if (modal) {
+            modal.classList.remove('open');
+            setTimeout(() => {
+                modal.remove();
+                if (window.currentInfoModalAction) {
+                    window.currentInfoModalAction();
+                }
+                window.currentInfoModalAction = null;
+            }, 300);
+        }
+    }
+
+    /**
+     * Show a themed confirmation modal
+     * @param {string} title - Modal title
+     * @param {string} message - Modal message
+     * @param {string} confirmText - Confirm button text
+     * @param {string} cancelText - Cancel button text
+     * @param {Function} onConfirm - Callback function on confirmation
+     * @param {Function} onCancel - Callback function on cancellation (optional)
+     */
+    function showThemedConfirmationModal(title, message, confirmText, cancelText = 'Cancel', onConfirm, onCancel) {
+        const existingModal = document.querySelector('.themed-confirmation-modal-backdrop');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modalHTML = `
+            <div class="modal-backdrop themed-confirmation-modal-backdrop" id="themedConfirmationModal" onclick="cancelThemedConfirmationAction()">
+                <div class="modal-content themed-confirmation-modal" onclick="event.stopPropagation()">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="themed-confirmation-modal-buttons">
+                        <button class="modal-button cancel" onclick="cancelThemedConfirmationAction()">
+                            ${cancelText}
+                        </button>
+                        <button class="modal-button submit" onclick="confirmThemedConfirmationAction()">
+                            ${confirmText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        window.currentThemedConfirmAction = onConfirm;
+        window.currentThemedCancelAction = onCancel;
+
+        setTimeout(() => {
+            const modal = document.getElementById('themedConfirmationModal');
+            if (modal) {
+                modal.classList.add('open');
+            }
+        }, 10);
+    }
+
+    /**
+     * Hide themed confirmation modal
+     */
+    function hideThemedConfirmationModal() {
+        const modal = document.getElementById('themedConfirmationModal');
+        if (modal) {
+            modal.classList.remove('open');
+            setTimeout(() => {
+                modal.remove();
+                window.currentThemedConfirmAction = null;
+                window.currentThemedCancelAction = null;
+            }, 300);
+        }
+    }
+
+    /**
+     * Handle cancel action in themed modal
+     */
+    function cancelThemedConfirmationAction() {
+        if (window.currentThemedCancelAction) {
+            window.currentThemedCancelAction();
+        }
+        hideThemedConfirmationModal();
+    }
+
+    /**
+     * Confirm action in themed modal
+     */
+    async function confirmThemedConfirmationAction() {
+        const confirmButton = document.querySelector('.themed-confirmation-modal .modal-button.submit');
+        const cancelButton = document.querySelector('.themed-confirmation-modal .modal-button.cancel');
+
+        if (confirmButton) {
+            confirmButton.disabled = true;
+            confirmButton.style.pointerEvents = 'none';
+            confirmButton.style.opacity = '0.6';
+            confirmButton.style.cursor = 'not-allowed';
+            confirmButton.textContent = 'Processing...';
+        }
+
+        if (cancelButton) {
+            cancelButton.disabled = true;
+            cancelButton.style.pointerEvents = 'none';
+            cancelButton.style.opacity = '0.6';
+            cancelButton.style.cursor = 'not-allowed';
+        }
+
+        try {
+            if (window.currentThemedConfirmAction) {
+                await window.currentThemedConfirmAction();
+            }
+        } catch (error) {
+            console.error('Themed confirmation action failed:', error);
+        } finally {
+            window.currentThemedConfirmAction = null;
+            window.currentThemedCancelAction = null;
+            setTimeout(() => {
+                hideThemedConfirmationModal();
+            }, 500);
+        }
+    }
+
 /**
  * Hide confirmation modal
  */
@@ -230,6 +393,13 @@ function cancelAction() {
 async function confirmAction() {
     const confirmButton = document.querySelector('.confirmation-modal-button.confirm, .confirmation-modal-button.unflag');
     const cancelButton = document.querySelector('.confirmation-modal-button.cancel');
+
+    window.showInfoModal = showInfoModal;
+    window.hideInfoModal = hideInfoModal;
+    window.showThemedConfirmationModal = showThemedConfirmationModal;
+    window.hideThemedConfirmationModal = hideThemedConfirmationModal;
+    window.cancelThemedConfirmationAction = cancelThemedConfirmationAction;
+    window.confirmThemedConfirmationAction = confirmThemedConfirmationAction;
     
     if (confirmButton) {
         // Disable confirm button immediately
