@@ -769,6 +769,9 @@ async function handleProductSubmission(event) {
         console.log('API result:', result);
         
         if (result.success) {
+            if (window.notifyDatabaseChanged) {
+                window.notifyDatabaseChanged();
+            }
             // Store parameter values temporarily to persist after group assignment
             window.pendingParameterValues = productData.parameter_values || [];
             // Handle group assignment after product creation/update
@@ -1259,6 +1262,9 @@ async function handleIngredientSubmission(event) {
         }
         
         if (result.success) {
+            if (window.notifyDatabaseChanged) {
+                window.notifyDatabaseChanged();
+            }
             if (isEditMode) {
                 handleIngredientUpdateSuccess(submitButton, result);
             } else {

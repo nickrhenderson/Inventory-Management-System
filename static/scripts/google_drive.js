@@ -10,6 +10,10 @@ let autoBackupTimer = null;
 let lastDatabaseRevision = null;
 let autoBackupInProgress = false;
 let autoBackupEnabled = false;
+let autoBackupCountdownTimer = null;
+let autoBackupDueAt = null;
+let lastStatusFetchAt = 0;
+const MIN_STATUS_REFRESH_INTERVAL_MS = 15 * 1000;
 
 function getGoogleDriveButton() {
     return document.getElementById('googleDriveButton');
@@ -27,6 +31,49 @@ function getAutoBackupControl() {
     return document.getElementById('googleDriveAutoBackup');
 }
 
+function getAutoBackupCountdownElement() {
+    return document.getElementById('googleDriveAutoBackupCountdown');
+}
+
+function updateAutoBackupCountdownDisplay() {
+    const countdownEl = getAutoBackupCountdownElement();
+    if (!countdownEl) return;
+
+    if (!autoBackupDueAt || !isAutoBackupEnabled()) {
+        countdownEl.textContent = '';
+        countdownEl.classList.remove('active');
+        return;
+    }
+
+    const remainingMs = autoBackupDueAt - Date.now();
+    if (remainingMs <= 0) {
+        countdownEl.textContent = '';
+        countdownEl.classList.remove('active');
+        return;
+    }
+
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    countdownEl.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    countdownEl.classList.add('active');
+}
+
+function startAutoBackupCountdownDisplay() {
+    if (autoBackupCountdownTimer) return;
+    autoBackupCountdownTimer = window.setInterval(updateAutoBackupCountdownDisplay, 250);
+    updateAutoBackupCountdownDisplay();
+}
+
+function stopAutoBackupCountdownDisplay() {
+    if (autoBackupCountdownTimer) {
+        window.clearInterval(autoBackupCountdownTimer);
+        autoBackupCountdownTimer = null;
+    }
+    autoBackupDueAt = null;
+    updateAutoBackupCountdownDisplay();
+}
+
 function isAutoBackupEnabled() {
     return autoBackupEnabled;
 }
@@ -35,6 +82,9 @@ function updateAutoBackupControl() {
     const control = getAutoBackupControl();
     if (control) {
         control.checked = isAutoBackupEnabled();
+    }
+    if (!isAutoBackupEnabled()) {
+        stopAutoBackupCountdownDisplay();
     }
 }
 
@@ -62,7 +112,11 @@ function updateGoogleDriveMenuMetadata(status) {
     const downloadMeta = getGoogleDriveMetaElement('download');
 
     const latestBackup = status && status.latest_backup ? status.latest_backup : null;
-    const latestBackupTime = latestBackup && latestBackup.created_time ? latestBackup.created_time : null;
+    // The backup file is overwritten in place on each backup, so createdTime never
+    // changes after the first upload; modifiedTime reflects the actual last backup.
+    const latestBackupTime = latestBackup
+        ? (latestBackup.modified_time || latestBackup.created_time)
+        : null;
 
     if (downloadMeta) {
         downloadMeta.textContent = formatGoogleDriveTimestamp(latestBackupTime);
@@ -122,6 +176,12 @@ function openGoogleDriveMenu() {
     if (!menu) return;
     menu.classList.add('show');
     menu.setAttribute('aria-hidden', 'false');
+
+    // Refresh the latest-backup timestamp when reopening, but throttle so repeated
+    // opens don't hammer the Drive API.
+    if (Date.now() - lastStatusFetchAt >= MIN_STATUS_REFRESH_INTERVAL_MS) {
+        refreshGoogleDriveStatus();
+    }
 }
 
 function closeGoogleDriveMenu() {
@@ -145,6 +205,7 @@ async function refreshGoogleDriveStatus() {
     try {
         await waitForPywebview();
         const status = await pywebview.api.get_google_drive_status();
+        lastStatusFetchAt = Date.now();
         googleDriveStatusCache = status || null;
         setGoogleDriveButtonState(status || {});
         updateGoogleDriveMenuMetadata(status || {});
@@ -203,6 +264,7 @@ function clearAutoBackupTimer() {
         window.clearTimeout(autoBackupTimer);
         autoBackupTimer = null;
     }
+    stopAutoBackupCountdownDisplay();
 }
 
 function scheduleAutoBackup() {
@@ -211,8 +273,11 @@ function scheduleAutoBackup() {
     }
 
     clearAutoBackupTimer();
+    autoBackupDueAt = Date.now() + AUTO_BACKUP_DELAY_MS;
+    startAutoBackupCountdownDisplay();
     autoBackupTimer = window.setTimeout(async () => {
         autoBackupTimer = null;
+        stopAutoBackupCountdownDisplay();
         if (autoBackupInProgress || !isAutoBackupEnabled()) {
             return;
         }
@@ -259,6 +324,30 @@ async function checkForDatabaseChanges() {
         console.error('Failed to check database changes for auto backup:', error);
     }
 }
+
+/**
+ * Notify the auto-backup system that a database write just completed.
+ * Called directly by mutation code paths (product/ingredient/group changes) so the
+ * backup countdown starts immediately instead of waiting on the periodic revision poll.
+ */
+async function notifyDatabaseChanged() {
+    if (!isAutoBackupEnabled()) {
+        return;
+    }
+
+    try {
+        await waitForPywebview();
+        const response = await pywebview.api.get_database_revision();
+        if (response && response.success && response.revision) {
+            lastDatabaseRevision = response.revision;
+        }
+    } catch (error) {
+        console.error('Failed to refresh database revision after change:', error);
+    }
+
+    scheduleAutoBackup();
+}
+window.notifyDatabaseChanged = notifyDatabaseChanged;
 
 async function saveAutoBackupSetting(enabled) {
     try {

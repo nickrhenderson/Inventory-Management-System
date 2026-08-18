@@ -685,6 +685,29 @@ html[data-theme="dark"] #googleDriveButton .drive-button-icon {
     cursor: pointer;
 }
 
+.google-drive-auto-backup-countdown {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    font-size: 0.85em;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-gray);
+    background: rgba(0, 0, 0, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+html[data-theme="dark"] .google-drive-auto-backup-countdown {
+    color: var(--color-gray-dark);
+}
+
+.google-drive-auto-backup-countdown.active {
+    display: inline-flex;
+}
+
 .google-drive-auto-backup input {
     position: absolute;
     width: 1px;

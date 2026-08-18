@@ -782,6 +782,9 @@ function showAmountChangeConfirmation(productId, change) {
                 const result = await pywebview.api.update_product_amount(productId, safeAmount);
                 
                 if (result.success) {
+                    if (window.notifyDatabaseChanged) {
+                        window.notifyDatabaseChanged();
+                    }
                     // Update the original amount to the new value
                     const row = document.querySelector(`tr[data-product-id="${productId}"]`);
                     if (row) {
@@ -808,10 +811,11 @@ function showAmountChangeConfirmation(productId, change) {
                 }
             } catch (error) {
                 console.error('Error updating product amount:', error);
+                const message = error && error.message ? error.message : 'Failed to update product amount. Please try again.';
                 if (window.notifyError) {
-                    window.notifyError('Failed to update product amount. Please try again.');
+                    window.notifyError(message);
                 } else {
-                    alert('Failed to update product amount. Please try again.');
+                    alert(message);
                 }
                 
                 // Revert the input to original value from database
@@ -903,6 +907,9 @@ async function confirmDeleteProduct(productId, productName) {
                 const result = await pywebview.api.delete_product(productId);
                 
                 if (result.success) {
+                    if (window.notifyDatabaseChanged) {
+                        window.notifyDatabaseChanged();
+                    }
                     // Clear selection if the deleted product was selected
                     if (selectedProductId === productId) {
                         await unselectCurrentProduct();

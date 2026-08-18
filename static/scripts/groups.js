@@ -50,6 +50,9 @@ async function createGroup(groupName) {
         const response = await pywebview.api.create_group(groupName);
         
         if (response.success) {
+            if (window.notifyDatabaseChanged) {
+                window.notifyDatabaseChanged();
+            }
             const newGroup = {
                 id: response.group_id,
                 name: groupName,
@@ -82,6 +85,9 @@ async function deleteGroup(groupId) {
         const response = await pywebview.api.delete_group(groupId);
         
         if (response.success) {
+            if (window.notifyDatabaseChanged) {
+                window.notifyDatabaseChanged();
+            }
             const index = productGroups.findIndex(g => g.id === groupId);
             if (index !== -1) {
                 productGroups.splice(index, 1);

@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadScript({ src, isModule }) {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = src;
+            // Cache-bust so WebView2's disk cache can't serve a stale copy of app logic
+            script.src = src + '?v=' + Date.now();
             if (isModule) script.type = 'module';
             script.onload = resolve;
             script.onerror = () => reject(new Error(`Failed to load script: ${src}`));

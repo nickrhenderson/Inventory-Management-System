@@ -600,6 +600,9 @@ async function confirmDeleteIngredient(ingredientId, ingredientName) {
                 const result = await pywebview.api.delete_ingredient(ingredientId);
                 
                 if (result.success) {
+                    if (window.notifyDatabaseChanged) {
+                        window.notifyDatabaseChanged();
+                    }
                     // Use unified refresh function to reload data with search persistence
                     await refreshInventoryData();
                 } else {

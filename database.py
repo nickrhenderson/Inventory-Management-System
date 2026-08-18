@@ -121,7 +121,8 @@ class DatabaseManager:
 
 	def _error_response(self, error):
 		"""Create standardized error response"""
-		return {"success": False, "error": str(error)}
+		message = str(error)
+		return {"success": False, "error": message, "message": message}
 
 	def _log_inventory_event(self, conn, product_id, delta, title=None, event_date=None):
 		"""Log a quantity delta for a product."""

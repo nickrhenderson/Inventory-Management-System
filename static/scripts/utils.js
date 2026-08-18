@@ -256,6 +256,14 @@ function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm,
     }
 
     /**
+     * Show a themed error notification using the info modal instead of a native alert()
+     * @param {string} message - Error message to display
+     */
+    function notifyError(message) {
+        showInfoModal('Error', message, 'OK');
+    }
+
+    /**
      * Show a themed confirmation modal
      * @param {string} title - Modal title
      * @param {string} message - Modal message
@@ -400,6 +408,7 @@ async function confirmAction() {
     window.hideThemedConfirmationModal = hideThemedConfirmationModal;
     window.cancelThemedConfirmationAction = cancelThemedConfirmationAction;
     window.confirmThemedConfirmationAction = confirmThemedConfirmationAction;
+    window.notifyError = notifyError;
     
     if (confirmButton) {
         // Disable confirm button immediately
