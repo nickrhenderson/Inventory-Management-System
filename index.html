@@ -10,11 +10,15 @@
     <script>
         (function () {
             try {
+                var launchTheme = new URLSearchParams(window.location.hash.slice(1)).get('theme');
                 var saved = window.localStorage && window.localStorage.getItem('inventory_theme');
-                var theme = saved === 'dark' || saved === 'light'
+                var theme = launchTheme === 'dark' || launchTheme === 'light'
+                    ? launchTheme
+                    : saved === 'dark' || saved === 'light'
                     ? saved
                     : 'light';
                 document.documentElement.dataset.theme = theme;
+                window.localStorage && window.localStorage.setItem('inventory_theme', theme);
             } catch (error) {
                 document.documentElement.dataset.theme = 'light';
             }
@@ -22,6 +26,19 @@
     </script>
     <style>
         /* Critical styles to prevent FOUC - must be inline and first */
+        :root {
+            --loading-bg: #f0f0f0;
+            --loading-spinner-track: #f3f3f3;
+            --loading-text: #666666;
+            --loading-accent: #007acc;
+        }
+
+        html[data-theme="dark"] {
+            --loading-bg: #0a0c10;
+            --loading-spinner-track: #141821;
+            --loading-text: #aab6c9;
+        }
+
         /* Prevent scroll while loading */
         body:not(.loaded) {
             overflow: hidden !important;
@@ -34,7 +51,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: var(--bg-primary, #f0f0f0);
+            background: var(--loading-bg);
             z-index: 99999;
             display: flex;
             align-items: center;
@@ -53,15 +70,15 @@
         .loading-spinner {
             width: 50px;
             height: 50px;
-            border: 5px solid var(--bg-light-gray, #f3f3f3);
-            border-top: 5px solid var(--loading-accent, #007acc);
+            border: 5px solid var(--loading-spinner-track);
+            border-top: 5px solid var(--loading-accent);
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
         
         .loading-text {
-            color: var(--text-gray, #666);
+            color: var(--loading-text);
             font-size: 18px;
             font-weight: 500;
         }
@@ -276,7 +293,8 @@
 
     <!-- Tabs -->
     <nav class="tabs" id="mainTabs">
-        <button class="tab active" data-tab="inventory">Inventory</button>
+        <button class="tab active" data-tab="inventory">Batches</button>
+        <button class="tab" data-tab="products">Product</button>
         <button class="tab" data-tab="events">Events</button>
     </nav>
     
@@ -298,6 +316,15 @@
             </section>
         </div>
 
+        <!-- Products View -->
+        <div class="tab-view" id="productsView" style="display:none;">
+            <section class="box left">
+                <div class="products-container">
+                    <div id="productsList"></div>
+                </div>
+            </section>
+        </div>
+
         <!-- Events View -->
         <div class="tab-view" id="eventsView" style="display:none;">
             <section class="box left">
@@ -312,7 +339,7 @@
     <div class="context-menu" id="contextMenu">
         <div class="context-menu-item inventory-only" onclick="openProductModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
-            <span>Add Product</span>
+            <span>Add Batch</span>
         </div>
         <div class="context-menu-item inventory-only" onclick="openIngredientModal(); hideContextMenu()">
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
@@ -326,6 +353,10 @@
             <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Event</span>
         </div>
+        <div class="context-menu-item products-only" onclick="openPhoneConnectModal(); hideContextMenu()" style="display:none;">
+            <img src="static/img/svg/phone.svg" alt="Phone" class="menu-icon" />
+            <span>Connect Phone</span>
+        </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" onclick="refreshFiles(); hideContextMenu()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="menu-icon">
@@ -336,14 +367,14 @@
     </div>
     
     <!-- Modals -->
-    <!-- Product Creation Modal -->
+    <!-- Batch Modal -->
     <div class="modal-backdrop creation-modal-backdrop" id="productModalBackdrop" onclick="closeProductModal()">
         <div class="modal-content creation-modal" id="productModal" onclick="event.stopPropagation()">
             <button class="modal-close-button" onclick="closeProductModal()" title="Close">×</button>
-            <h3>Add Unit</h3>
+            <h3>Add Batch</h3>
             <form id="productForm">
                 <div class="form-group">
-                    <label for="productName">Unit Name:</label>
+                    <label for="productName">Product Name:</label>
                     <input type="text" id="productName" name="productName" required autocomplete="off">
                 </div>
                 <div class="form-group">
@@ -383,13 +414,21 @@
                 </div>
                 <div class="form-actions">
                     <button type="button" class="modal-button cancel" onclick="closeProductModal()">Cancel</button>
-                    <button type="submit" class="modal-button submit" id="submitProductButton">Add Unit</button>
+                    <button type="submit" class="modal-button submit" id="submitProductButton">Add Batch</button>
                 </div>
             </form>
             <div class="barcode-result" id="barcodeResult" style="display: none;"></div>
         </div>
     </div>
-    
+
+    <div class="modal-backdrop creation-modal-backdrop" id="phoneConnectModalBackdrop" onclick="closePhoneConnectModal()">
+        <div class="modal-content phone-connect-modal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closePhoneConnectModal()" title="Close">×</button>
+            <h3>Connect Phone</h3>
+            <div id="phoneConnectQr" class="phone-connect-qr" aria-label="Pairing QR code"></div>
+        </div>
+    </div>
+
     <!-- Ingredient Creation Modal -->
     <div class="modal-backdrop creation-modal-backdrop" id="ingredientModalBackdrop" onclick="closeIngredientModal()">
         <div class="modal-content creation-modal" id="ingredientModal" onclick="event.stopPropagation()">

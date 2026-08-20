@@ -325,7 +325,7 @@ function createProductsTableHTML() {
                     <th>Date Mixed</th>
                     <th>Unit Cost</th>
                     <th>Quantity</th>
-                    <th>Amount</th>
+                    <th>Units Created</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -408,49 +408,18 @@ async function createProductRow(product, index) {
     const dateMixed = formatDate(product.date_mixed);
     const totalCost = formatCurrency(product.total_cost);
     const totalQuantity = formatQuantity(product.total_quantity);
-    const amount = product.amount || 0;
-    
     row.innerHTML = `
         <td><strong>${product.product_name}</strong></td>
         <td>${product.batch_number}</td>
         <td>${dateMixed}</td>
         <td class="price">${totalCost}</td>
         <td class="quantity">${totalQuantity}</td>
-        <td class="amount">
-            <div class="amount-controls">
-                <button class="amount-button minus" 
-                        onclick="event.stopPropagation(); adjustProductAmountLocal(${product.id}, -1)"
-                        title="Decrease amount">
-                    <div class="amount-icon">
-                        <img src="static/img/svg/minus.svg" alt="Decrease" />
-                    </div>
-                </button>
-                <input type="number" 
-                       class="amount-input" 
-                       value="${amount}" 
-                       min="0" 
-                       step="1"
-                       data-product-id="${product.id}"
-                       data-product-name="${product.product_name.replace(/"/g, '&quot;')}"
-                       data-original-amount="${amount}"
-                       onclick="event.stopPropagation()"
-                       onchange="handleAmountInputChange(this)"
-                       onblur="handleAmountInputBlur(this)"
-                       onfocus="handleAmountInputFocus(this)">
-                <button class="amount-button plus" 
-                        onclick="event.stopPropagation(); adjustProductAmountLocal(${product.id}, 1)"
-                        title="Increase amount">
-                    <div class="amount-icon">
-                        <img src="static/img/svg/plus.svg" alt="Increase" />
-                    </div>
-                </button>
-            </div>
-        </td>
+        <td><span class="units-created-value">${product.original_amount || 0}</span></td>
         <td>
             <div class="product-actions">
                 <button class="product-edit-button" 
                         onclick="event.stopPropagation(); editProduct(${product.id})"
-                        title="Edit Product">
+                        title="Edit Batch">
                     <div class="edit-icon">
                         <img src="static/img/svg/edit.svg" alt="Edit" />
                     </div>

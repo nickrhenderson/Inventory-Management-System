@@ -12,7 +12,7 @@ from google_drive_backup import GoogleDriveBackupService
 from settings import SettingsManager
 
 # Application version
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.8.1"
 GITHUB_REPO = "nickrhenderson/Inventory-Management-System"
 
 # Windows-specific import for taskbar icon
@@ -46,6 +46,14 @@ class InventoryAPI:
 	def get_products_data(self):
 		"""Get all products ordered by date_mixed (newest first)"""
 		return self.db_manager.get_products_data()
+
+	def get_product_totals(self):
+		"""Get combined inventory totals for products with the same exact name."""
+		return self.db_manager.get_product_totals()
+
+	def update_product_total(self, product_name, amount_on_hand):
+		"""Update the combined on-hand amount for an exact product name."""
+		return self.db_manager.update_product_total(product_name, amount_on_hand)
 	
 	def get_product_ingredients(self, product_id):
 		"""Get all ingredients used in a specific product with their details"""
@@ -436,8 +444,11 @@ def main():
 	# Use resource path function to handle both development and compiled versions
 	html_file = get_resource_path("index.html")
 	
-	# Get the HTML file URL
-	html_url = get_html_file_url(html_file)
+	# Pass the persisted theme into the first document load so its loading screen
+	# can use the correct palette before the JavaScript bridge is available.
+	theme = api.settings.get("theme")
+	theme = theme if theme in ("light", "dark") else "light"
+	html_url = f"{get_html_file_url(html_file)}#theme={theme}"
 	
 	window = webview.create_window(
 		"Bad-Bandit IMS",

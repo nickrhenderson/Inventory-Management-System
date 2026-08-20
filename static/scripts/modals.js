@@ -29,16 +29,16 @@ async function openProductModal(productData = null, isEditMode = false) {
             const cancelButton = document.querySelector('#productModal .modal-button.cancel');
             
             if (isEditMode && productData) {
-                modalTitle.textContent = 'Edit Unit';
-                submitButton.textContent = 'Update Unit';
+                modalTitle.textContent = 'Edit Batch';
+                submitButton.textContent = 'Update Batch';
                 setUnitCountFieldsForMode(true);
                 // Store edit data for form submission
                 window.editingProductData = productData;
                 // Populate form with existing data AFTER ingredients are loaded
                 await populateProductForm(productData);
             } else {
-                modalTitle.textContent = 'Add New Unit';
-                submitButton.textContent = 'Add Unit';
+                modalTitle.textContent = 'Add Batch';
+                submitButton.textContent = 'Add Batch';
                 setUnitCountFieldsForMode(false);
                 window.editingProductData = null;
                 // Clear any existing ingredient data
@@ -78,11 +78,15 @@ async function openProductModal(productData = null, isEditMode = false) {
 
 function setUnitCountFieldsForMode(isEditMode) {
     const currentField = document.getElementById('currentProductAmountField');
+    const currentAmountInput = document.getElementById('productAmount');
     const originalLabel = document.getElementById('originalProductAmountLabel');
     const countFields = currentField ? currentField.closest('.product-count-fields') : null;
 
     if (currentField) {
-        currentField.hidden = !isEditMode;
+        currentField.hidden = true;
+    }
+    if (currentAmountInput) {
+        currentAmountInput.disabled = true;
     }
     if (countFields) {
         countFields.classList.toggle('creation-mode', !isEditMode);
@@ -463,7 +467,7 @@ function resetProductForm() {
     // Reset submit button
     const submitButton = document.getElementById('submitProductButton');
     if (submitButton) {
-        submitButton.textContent = 'Add Unit';
+        submitButton.textContent = 'Add Batch';
         submitButton.className = 'modal-button submit';
         submitButton.disabled = false;
     }
@@ -471,7 +475,7 @@ function resetProductForm() {
     // Reset modal title
     const modalTitle = document.querySelector('#productModal h3');
     if (modalTitle) {
-        modalTitle.textContent = 'Add New Unit';
+        modalTitle.textContent = 'Add Batch';
     }
     
     // Reset form field states
@@ -795,7 +799,7 @@ async function handleProductSubmission(event) {
         
         // Always reset button state on any error, including validation errors
         submitButton.disabled = false;
-        submitButton.textContent = isEditMode ? 'Update Unit' : 'Add Unit';
+        submitButton.textContent = isEditMode ? 'Update Batch' : 'Add Product';
         submitButton.className = 'modal-button submit';
         
         if (isEditMode) {
@@ -934,6 +938,10 @@ function handleProductCreationSuccess(submitButton, barcodeResult, productName) 
         }
         
         await refreshInventoryData();
+
+        if (window.currentTab === 'products' && typeof window.renderProductsList === 'function') {
+            await window.renderProductsList();
+        }
 
         // After product is created and group assignment done, save parameter values if any
         try {

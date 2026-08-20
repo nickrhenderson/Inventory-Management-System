@@ -51,6 +51,12 @@ class DatabaseManager:
 				('notes', 'TEXT'),
 				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
 			],
+			'product_totals': [
+				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
+				('product_name', 'TEXT UNIQUE NOT NULL'),
+				('amount_on_hand', 'INTEGER DEFAULT 0'),
+				('last_updated', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+			],
 			'product_ingredients': [
 				('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'),
 				('product_id', 'INTEGER NOT NULL'),
@@ -135,6 +141,29 @@ class DatabaseManager:
 			VALUES (?, ?, ?, ?)
 			""",
 			(product_id, delta, title or "Inventory change", event_date_value)
+		)
+
+	def _change_product_total(self, conn, product_name, delta):
+		"""Apply a stock change to the total tracked for an exact product name."""
+		conn.execute(
+			"""
+			INSERT INTO product_totals (product_name, amount_on_hand)
+			VALUES (?, ?)
+			ON CONFLICT(product_name) DO UPDATE SET
+				amount_on_hand = MAX(0, product_totals.amount_on_hand + excluded.amount_on_hand),
+				last_updated = CURRENT_TIMESTAMP
+			""",
+			(product_name, delta)
+		)
+
+	def _seed_product_totals(self, conn):
+		"""Create totals for existing batch names without overwriting edited totals."""
+		conn.execute(
+			"""
+			INSERT INTO product_totals (product_name, amount_on_hand)
+			SELECT product_name, SUM(amount) FROM products GROUP BY product_name
+			ON CONFLICT(product_name) DO NOTHING
+			"""
 		)
 
 	def get_database_path(self):
@@ -269,6 +298,8 @@ class DatabaseManager:
 					SET original_amount = CASE WHEN amount > 0 THEN amount ELSE 1 END
 				""")
 				conn.execute("UPDATE products SET total_cost = total_cost / original_amount")
+
+			self._seed_product_totals(conn)
 			
 			# Create indexes for better performance
 			self._create_indexes(conn)
@@ -422,11 +453,61 @@ class DatabaseManager:
 		with self._get_db_connection() as conn:
 			cursor = conn.execute('''
 				SELECT id, barcode_id, product_name, batch_number, date_mixed, 
-				       total_quantity, total_cost, amount, notes
+				       total_quantity, total_cost, amount, original_amount, notes
 				FROM products 
 				ORDER BY date_mixed DESC
 			''')
 			return [dict(row) for row in cursor.fetchall()]
+
+	def get_product_totals(self):
+		"""Get one inventory total for every exact product name."""
+		with self._get_db_connection() as conn:
+			cursor = conn.execute('''
+				SELECT totals.product_name, totals.amount_on_hand,
+				       COALESCE(SUM(batches.original_amount), 0) AS units_created
+				FROM product_totals AS totals
+				LEFT JOIN products AS batches ON batches.product_name = totals.product_name
+				GROUP BY totals.product_name, totals.amount_on_hand
+				ORDER BY totals.product_name COLLATE NOCASE
+			''')
+			return [dict(row) for row in cursor.fetchall()]
+
+	def update_product_total(self, product_name, amount_on_hand):
+		"""Set the combined stock for a product and preserve batch-level event compatibility."""
+		try:
+			amount = max(0, int(amount_on_hand))
+			with self._get_db_connection() as conn:
+				batches = conn.execute('''
+					SELECT id, amount, original_amount FROM products
+					WHERE product_name = ?
+					ORDER BY date_mixed DESC, id DESC
+				''', (product_name,)).fetchall()
+				if not batches:
+					return self._error_response("Product not found")
+
+				capacity = sum(batch['original_amount'] or 0 for batch in batches)
+				if amount > capacity:
+					return self._error_response("Amount on hand cannot exceed the total units produced")
+
+				remaining = amount
+				for batch in batches:
+					new_amount = min(batch['original_amount'] or 0, remaining)
+					remaining -= new_amount
+					delta = new_amount - (batch['amount'] or 0)
+					conn.execute(
+						"UPDATE products SET amount = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?",
+						(new_amount, batch['id'])
+					)
+					self._log_inventory_event(conn, batch['id'], delta, "Manual product adjustment")
+
+				conn.execute(
+					"UPDATE product_totals SET amount_on_hand = ?, last_updated = CURRENT_TIMESTAMP WHERE product_name = ?",
+					(amount, product_name)
+				)
+				conn.commit()
+				return self._success_response("Product amount updated successfully", amount_on_hand=amount)
+		except Exception as e:
+			return self._error_response(e)
 	
 	def get_product_ingredients(self, product_id):
 		"""Get all ingredients used in a specific product with their details"""
@@ -498,7 +579,7 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# First check if product exists
-				product = conn.execute('SELECT product_name FROM products WHERE id = ?', (product_id,)).fetchone()
+				product = conn.execute('SELECT product_name, amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not product:
 					return self._error_response("Product not found")
 				
@@ -509,6 +590,7 @@ class DatabaseManager:
 				
 				# Delete the product
 				conn.execute('DELETE FROM products WHERE id = ?', (product_id,))
+				self._change_product_total(conn, product_name, -(product['amount'] or 0))
 				conn.commit()
 				
 				return self._success_response(f"Product '{product_name}' deleted successfully")
@@ -617,9 +699,11 @@ class DatabaseManager:
 				mixed_date = self._parse_date(product_data['mixed_date'], datetime.now().date())
 				
 				# Verify product exists
-				existing_product = conn.execute('SELECT id FROM products WHERE id = ?', (product_id,)).fetchone()
+				existing_product = conn.execute('SELECT product_name, amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not existing_product:
 					return self._error_response("Product not found")
+				previous_name = existing_product['product_name']
+				previous_amount = existing_product['amount'] or 0
 				
 				# Update product basic info (allow name, mixed date, and counts to change)
 				amount = int(product_data.get('amount', 0))
@@ -635,6 +719,9 @@ class DatabaseManager:
 					SET product_name = ?, date_mixed = ?, amount = ?, original_amount = ?, notes = ?, last_updated = CURRENT_TIMESTAMP
 					WHERE id = ?
 				''', (product_data['product_name'], mixed_date, amount, original_amount, "Updated via product edit modal", product_id))
+				if previous_name != product_data['product_name'] or previous_amount != amount:
+					self._change_product_total(conn, previous_name, -previous_amount)
+					self._change_product_total(conn, product_data['product_name'], amount)
 				
 				# Delete existing product-ingredient relationships
 				conn.execute('DELETE FROM product_ingredients WHERE product_id = ?', (product_id,))
@@ -684,7 +771,7 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# Get current amount
-				current_product = conn.execute('SELECT amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
+				current_product = conn.execute('SELECT product_name, amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not current_product:
 					return self._error_response("Product not found")
 				
@@ -700,6 +787,7 @@ class DatabaseManager:
 					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
 					WHERE id = ?
 				''', (new_amount, product_id))
+				self._change_product_total(conn, current_product['product_name'], new_amount - current_amount)
 				self._log_inventory_event(conn, product_id, new_amount - current_amount, "Manual adjustment")
 				
 				conn.commit()
@@ -717,7 +805,7 @@ class DatabaseManager:
 		try:
 			with self._get_db_connection() as conn:
 				# Verify product exists
-				existing_product = conn.execute('SELECT id, amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
+				existing_product = conn.execute('SELECT product_name, amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 				if not existing_product:
 					return self._error_response("Product not found")
 				
@@ -734,6 +822,7 @@ class DatabaseManager:
 					SET amount = ?, last_updated = CURRENT_TIMESTAMP 
 					WHERE id = ?
 				''', (amount, product_id))
+				self._change_product_total(conn, existing_product['product_name'], amount - current_amount)
 				self._log_inventory_event(conn, product_id, amount - current_amount, "Manual Inventory Adjustment")
 				
 				conn.commit()
@@ -873,6 +962,7 @@ class DatabaseManager:
 				conn.execute('''
 					UPDATE products SET total_quantity = ?, total_cost = ? WHERE id = ?
 				''', (total_quantity, total_cost / original_amount, product_id))
+				self._change_product_total(conn, product_data['product_name'], amount)
 				self._log_inventory_event(conn, product_id, amount, "Product created", mixed_date)
 				
 				conn.commit()
@@ -914,7 +1004,7 @@ class DatabaseManager:
 					delta = int(entry.get('delta', 0))
 					if not product_id or delta == 0:
 						continue
-					current_row = conn.execute('SELECT amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
+					current_row = conn.execute('SELECT product_name, amount, original_amount FROM products WHERE id = ?', (product_id,)).fetchone()
 					if not current_row:
 						raise Exception(f"Product {product_id} not found")
 					current_amount = current_row[0] or 0
@@ -928,6 +1018,7 @@ class DatabaseManager:
 						"UPDATE products SET amount = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?",
 						(new_amount, product_id)
 					)
+					self._change_product_total(conn, current_row['product_name'], delta)
 					self._log_inventory_event(
 						conn,
 						product_id,

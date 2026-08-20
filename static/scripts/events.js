@@ -5,10 +5,12 @@ let eventSelectedProducts = new Map();
 let eventCollapsedStates = new Map();
 let eventsSearchTerm = '';
 let inventorySearchTerm = '';
+let productsSearchTerm = '';
 let eventGroupObserver = null;
 let eventsLoaded = false;
 let eventsDirty = false;
 let tabTransitionToken = 0;
+let displayedTab = 'inventory';
 
 const TAB_CONTENT_FADE_MS = 220;
 const TAB_BOX_TRANSITION_MS = 320;
@@ -21,9 +23,10 @@ function nextFrame() {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
-function resetTabTransitionClasses(inventoryView, eventsView) {
-    inventoryView.classList.remove('tab-content-hidden', 'tab-collapsed');
-    eventsView.classList.remove('tab-content-hidden', 'tab-content-hidden-reverse');
+function resetTabTransitionClasses(...views) {
+    views.forEach(view => {
+        view.classList.remove('tab-content-hidden', 'tab-content-hidden-reverse', 'tab-collapsed');
+    });
 }
 
 // Mark events as needing a refresh because the DB likely changed.
@@ -39,7 +42,12 @@ window.setActiveTab = setActiveTab;
 window.openEventModal = openEventModal;
 window.closeEventModal = closeEventModal;
 window.filterEvents = filterEvents;
+window.filterProductsList = filterProductsList;
 window.refreshEvents = refreshEvents;
+window.toggleContextMenuItemsForTab = toggleContextMenuItemsForTab;
+window.renderProductsList = renderProductsList;
+window.openPhoneConnectModal = openPhoneConnectModal;
+window.closePhoneConnectModal = closePhoneConnectModal;
 
 /**
  * Initialize IntersectionObserver for event groups
@@ -95,78 +103,249 @@ function animateEventGroupIn(group) {
 
 function setActiveTab(tab) {
     const transitionId = ++tabTransitionToken;
+    const previousTab = displayedTab;
     currentTab = tab;
     window.currentTab = tab;
+
     const inventoryView = document.getElementById('inventoryView');
+    const productsView = document.getElementById('productsView');
     const eventsView = document.getElementById('eventsView');
+    const views = { inventory: inventoryView, products: productsView, events: eventsView };
+    const nextView = views[tab];
+    const previousView = views[previousTab];
     const tabs = document.querySelectorAll('#mainTabs .tab');
-    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-    if (!inventoryView || !eventsView) {
+    tabs.forEach(tabButton => tabButton.classList.toggle('active', tabButton.dataset.tab === tab));
+
+    if (!inventoryView || !productsView || !eventsView || !previousView || !nextView) {
         return;
     }
 
-    if (tab === 'events') {
-        // Save current inventory search term before switching
+    resetTabTransitionClasses(inventoryView, productsView, eventsView);
+    Object.entries(views).forEach(([tabName, view]) => {
+        view.style.display = tabName === previousTab ? 'flex' : 'none';
+    });
+
+    if (previousTab === tab) {
+        updateSearchBar();
+        toggleContextMenuItemsForTab(tab);
+        return;
+    }
+
+    if (previousTab === 'inventory') {
         const searchBar = document.querySelector('.search-bar');
         if (searchBar) inventorySearchTerm = searchBar.value;
+    }
 
-        resetTabTransitionClasses(inventoryView, eventsView);
-        inventoryView.classList.add('tab-content-hidden');
+    previousView.classList.add(previousTab === 'inventory' ? 'tab-content-hidden' : 'tab-content-hidden-reverse');
 
-        (async () => {
-            await wait(TAB_CONTENT_FADE_MS);
-            if (transitionId !== tabTransitionToken) return;
+    (async () => {
+        await wait(TAB_CONTENT_FADE_MS);
+        if (transitionId !== tabTransitionToken) return;
 
+        if (previousTab === 'inventory') {
             inventoryView.classList.add('tab-collapsed');
             await wait(TAB_BOX_TRANSITION_MS);
             if (transitionId !== tabTransitionToken) return;
+        }
 
-            inventoryView.style.display = 'none';
-            inventoryView.classList.remove('tab-content-hidden', 'tab-collapsed');
+        previousView.style.display = 'none';
+        previousView.classList.remove('tab-content-hidden', 'tab-content-hidden-reverse', 'tab-collapsed');
 
-            eventsView.style.display = 'flex';
-            eventsView.classList.add('tab-content-hidden');
-            updateSearchBar();
-            toggleContextMenuItemsForTab('events');
+        nextView.style.display = 'flex';
+        displayedTab = tab;
+        nextView.classList.add(tab === 'inventory' ? 'tab-collapsed' : 'tab-content-hidden');
+        if (tab === 'inventory') nextView.classList.add('tab-content-hidden-reverse');
+        updateSearchBar();
+        toggleContextMenuItemsForTab(tab);
 
-            if (!eventsLoaded || eventsDirty) {
-                loadEvents();
-            }
+        if (tab === 'products') {
+            renderProductsList();
+        } else if (tab === 'events' && (!eventsLoaded || eventsDirty)) {
+            loadEvents();
+        }
 
+        await nextFrame();
+        if (transitionId !== tabTransitionToken) return;
+
+        if (tab === 'inventory') {
             await nextFrame();
-            if (transitionId !== tabTransitionToken) return;
-
-            eventsView.classList.remove('tab-content-hidden');
-        })();
-    } else {
-        resetTabTransitionClasses(inventoryView, eventsView);
-        eventsView.classList.add('tab-content-hidden-reverse');
-
-        (async () => {
-            await wait(TAB_CONTENT_FADE_MS);
-            if (transitionId !== tabTransitionToken) return;
-
-            eventsView.style.display = 'none';
-            eventsView.classList.remove('tab-content-hidden-reverse');
-
-            inventoryView.style.display = 'flex';
-            inventoryView.classList.add('tab-collapsed', 'tab-content-hidden-reverse');
-            inventoryView.getBoundingClientRect();
-            updateSearchBar();
-            toggleContextMenuItemsForTab('inventory');
-
-            await nextFrame();
-            await nextFrame();
-            if (transitionId !== tabTransitionToken) return;
-
-            inventoryView.classList.remove('tab-collapsed');
-
+            nextView.classList.remove('tab-collapsed');
             await wait(TAB_BOX_TRANSITION_MS);
             if (transitionId !== tabTransitionToken) return;
+            nextView.classList.remove('tab-content-hidden-reverse');
+        } else {
+            nextView.classList.remove('tab-content-hidden');
+        }
+    })();
+}
 
-            inventoryView.classList.remove('tab-content-hidden-reverse');
-        })();
+async function renderProductsList() {
+    const list = document.getElementById('productsList');
+    if (!list) return;
+
+    try {
+        await waitForPywebview();
+        const products = (await pywebview.api.get_product_totals()).filter(product =>
+            product.product_name.toLowerCase().includes(productsSearchTerm)
+        );
+        if (products.length === 0) {
+            const message = productsSearchTerm ? 'No matching products.' : 'Create a batch to add products.';
+            list.innerHTML = `<div class="empty-state-message"><h3>No Products</h3><p>${message}</p></div>`;
+            return;
+        }
+
+        list.innerHTML = '<div class="product-list"></div>';
+        const productList = list.querySelector('.product-list');
+
+        products.forEach((product, index) => {
+            const card = document.createElement('article');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <div class="product-image-placeholder" aria-label="Product image placeholder">IMG</div>
+                <div class="product-card-name"></div>
+                <div class="amount-controls product-amount-controls" data-product-index="${index}">
+                    <button class="amount-button minus" type="button" title="Decrease amount">
+                        <div class="amount-icon">
+                            <img src="static/img/svg/minus.svg" alt="Decrease" />
+                        </div>
+                    </button>
+                    <input type="number" class="amount-input" value="${product.amount_on_hand}" min="0" step="1" aria-label="Amount on hand">
+                    <button class="amount-button plus" type="button" title="Increase amount">
+                        <div class="amount-icon">
+                            <img src="static/img/svg/plus.svg" alt="Increase" />
+                        </div>
+                    </button>
+                </div>
+            `;
+            const productName = card.querySelector('.product-card-name');
+            productName.textContent = product.product_name;
+            productName.title = product.product_name;
+            productList.appendChild(card);
+        });
+
+        list.querySelectorAll('.product-amount-controls').forEach(controls => {
+            const product = products[Number(controls.dataset.productIndex)];
+            const input = controls.querySelector('.amount-input');
+            const minusButton = controls.querySelector('.minus');
+            const plusButton = controls.querySelector('.plus');
+
+            const saveConfirmedAmount = async amount => {
+                input.disabled = true;
+                minusButton.disabled = true;
+                plusButton.disabled = true;
+
+                try {
+                    const result = await pywebview.api.update_product_total(product.product_name, normalizedAmount);
+                    if (!result.success) {
+                        throw new Error(result.message || 'Failed to update product amount.');
+                    }
+                    input.value = result.amount_on_hand;
+                    product.amount_on_hand = result.amount_on_hand;
+                    await loadProductsData();
+                    window.markEventsDirty?.();
+                } catch (error) {
+                    input.value = product.amount_on_hand;
+                    window.notifyError?.(error.message || 'Failed to update product amount.');
+                } finally {
+                    input.disabled = false;
+                    minusButton.disabled = false;
+                    plusButton.disabled = false;
+                }
+            };
+
+            const requestAmountChange = requestedAmount => {
+                const originalAmount = product.amount_on_hand;
+                const normalizedAmount = Math.max(0, parseInt(requestedAmount, 10) || 0);
+                const maximumAmount = Number(product.units_created) || 0;
+
+                if (normalizedAmount > maximumAmount) {
+                    input.value = originalAmount;
+                    window.notifyError?.(`Amount on hand cannot exceed the ${maximumAmount} units created for ${product.product_name}.`);
+                    return;
+                }
+
+                if (normalizedAmount === originalAmount) {
+                    input.value = originalAmount;
+                    return;
+                }
+
+                input.value = normalizedAmount;
+                showConfirmationModal(
+                    'Confirm Amount Change',
+                    `Confirm your change for "${product.product_name}" amount from ${originalAmount} to ${normalizedAmount}.`,
+                    'Confirm',
+                    false,
+                    () => saveConfirmedAmount(normalizedAmount),
+                    () => { input.value = originalAmount; }
+                );
+            };
+
+            minusButton.addEventListener('click', () => requestAmountChange((parseInt(input.value, 10) || 0) - 1));
+            plusButton.addEventListener('click', () => requestAmountChange((parseInt(input.value, 10) || 0) + 1));
+            input.addEventListener('change', () => requestAmountChange(input.value));
+        });
+    } catch (error) {
+        console.error('Failed to load product totals', error);
+        list.innerHTML = '<div class="empty-state-message">Failed to load products.</div>';
     }
+}
+
+function filterProductsList(searchTerm) {
+    productsSearchTerm = (searchTerm || '').toLowerCase();
+    renderProductsList();
+}
+
+function openPhoneConnectModal() {
+    const modal = document.getElementById('phoneConnectModalBackdrop');
+    const qrContainer = document.getElementById('phoneConnectQr');
+    if (!modal || !qrContainer) return;
+
+    qrContainer.replaceChildren();
+    const matrixSize = 29;
+    const randomBytes = new Uint8Array(matrixSize * matrixSize);
+    crypto.getRandomValues(randomBytes);
+    const reserved = new Set();
+
+    const markFinder = (row, column) => {
+        for (let rowOffset = -1; rowOffset <= 7; rowOffset++) {
+            for (let columnOffset = -1; columnOffset <= 7; columnOffset++) {
+                const targetRow = row + rowOffset;
+                const targetColumn = column + columnOffset;
+                if (targetRow < 0 || targetRow >= matrixSize || targetColumn < 0 || targetColumn >= matrixSize) continue;
+                reserved.add(`${targetRow}:${targetColumn}`);
+            }
+        }
+    };
+
+    [[0, 0], [0, matrixSize - 7], [matrixSize - 7, 0]].forEach(([row, column]) => markFinder(row, column));
+    const isFinderPixel = (row, column, startRow, startColumn) => {
+        const rowOffset = row - startRow;
+        const columnOffset = column - startColumn;
+        return rowOffset >= 0 && rowOffset < 7 && columnOffset >= 0 && columnOffset < 7 &&
+            (rowOffset === 0 || rowOffset === 6 || columnOffset === 0 || columnOffset === 6 ||
+             (rowOffset >= 2 && rowOffset <= 4 && columnOffset >= 2 && columnOffset <= 4));
+    };
+
+    const fragment = document.createDocumentFragment();
+    for (let row = 0; row < matrixSize; row++) {
+        for (let column = 0; column < matrixSize; column++) {
+            const cell = document.createElement('span');
+            const finderPixel = isFinderPixel(row, column, 0, 0) ||
+                isFinderPixel(row, column, 0, matrixSize - 7) ||
+                isFinderPixel(row, column, matrixSize - 7, 0);
+            const isReserved = reserved.has(`${row}:${column}`);
+            cell.className = finderPixel || (!isReserved && randomBytes[row * matrixSize + column] > 127)
+                ? 'qr-cell filled'
+                : 'qr-cell';
+            fragment.appendChild(cell);
+        }
+    }
+    qrContainer.appendChild(fragment);
+    modal.classList.add('open');
+}
+
+function closePhoneConnectModal() {
+    document.getElementById('phoneConnectModalBackdrop')?.classList.remove('open');
 }
 
 function updateSearchBar() {
@@ -175,6 +354,8 @@ function updateSearchBar() {
         searchBar.placeholder = 'Search...';
         if (currentTab === 'events') {
             searchBar.value = eventsSearchTerm;
+        } else if (currentTab === 'products') {
+            searchBar.value = productsSearchTerm;
         } else {
             searchBar.value = inventorySearchTerm;
         }
@@ -183,8 +364,10 @@ function updateSearchBar() {
 
 function toggleContextMenuItemsForTab(tab) {
     const invOnly = document.querySelectorAll('.context-menu-item.inventory-only');
+    const productOnly = document.querySelectorAll('.context-menu-item.products-only');
     const evtOnly = document.querySelectorAll('.context-menu-item.events-only');
     invOnly.forEach(el => el.style.display = tab === 'inventory' ? '' : 'none');
+    productOnly.forEach(el => el.style.display = tab === 'products' ? '' : 'none');
     evtOnly.forEach(el => el.style.display = tab === 'events' ? '' : 'none');
 }
 

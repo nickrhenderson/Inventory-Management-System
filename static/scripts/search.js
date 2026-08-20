@@ -219,13 +219,23 @@ function initializeSearch() {
         searchBar.addEventListener('input', (e) => {
             const searchTerm = e.target.value.trim();
             
-            // Check if we're on the events tab
+            // Events and Product tabs filter their already-loaded lists directly.
             if (window.currentTab === 'events') {
                 // Call events search directly (no debounce needed for simple filtering)
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
                     if (typeof window.filterEvents === 'function') {
                         window.filterEvents(searchTerm);
+                    }
+                }, 150);
+                return;
+            }
+
+            if (window.currentTab === 'products') {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (typeof window.filterProductsList === 'function') {
+                        window.filterProductsList(searchTerm);
                     }
                 }, 150);
                 return;
@@ -261,6 +271,13 @@ function initializeSearch() {
                 if (window.currentTab === 'events') {
                     if (typeof window.filterEvents === 'function') {
                         window.filterEvents('');
+                    }
+                    return;
+                }
+
+                if (window.currentTab === 'products') {
+                    if (typeof window.filterProductsList === 'function') {
+                        window.filterProductsList('');
                     }
                     return;
                 }
