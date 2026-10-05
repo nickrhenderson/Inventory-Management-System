@@ -8,6 +8,78 @@ let currentIngredientsView = 'all'; // 'all' or 'product'
 // Intersection Observer for viewport-based animations
 let productRowObserver = null;
 
+// Live-server change polling (phone writes straight to the DB)
+let lastLiveDbRevision = null;
+let livePollTimer = null;
+let livePollInFlight = false;
+
+const LIVE_CHANGE_POLL_MS = 2500;
+
+/**
+ * Detect when the database revision changes (e.g. a phone connected through
+ * the live server adjusted an amount) and refresh the current view in place,
+ * so the desktop UI updates without needing to switch tabs.
+ */
+async function pollForLiveDatabaseChanges() {
+    if (livePollInFlight) return;
+    livePollInFlight = true;
+    try {
+        await waitForPywebview();
+        const response = await pywebview.api.get_database_revision();
+        const revision = response && response.success ? response.revision : null;
+        if (!revision) return;
+
+        if (lastLiveDbRevision === null) {
+            lastLiveDbRevision = revision;
+            return;
+        }
+        if (revision !== lastLiveDbRevision) {
+            lastLiveDbRevision = revision;
+            await refreshInventoryData();
+            // Products tab list (card view) is a separate renderer
+            if (window.currentTab === 'products' && typeof window.renderProductsList === 'function') {
+                await window.renderProductsList();
+            }
+        }
+    } catch (error) {
+        // Ignore transient errors; the next poll will retry.
+    } finally {
+        livePollInFlight = false;
+    }
+}
+
+/**
+ * Start (or keep) polling for database changes coming from the live phone
+ * server. Polling only runs while the live server is active so the desktop
+ * app doesn't churn needlessly.
+ */
+function ensureLivePolling() {
+    if (livePollTimer) return;
+    livePollTimer = window.setInterval(pollForLiveDatabaseChanges, LIVE_CHANGE_POLL_MS);
+}
+
+/**
+ * Called when the phone live server starts so the desktop starts watching
+ * for DB changes (e.g. adjustments made from a scanned phone).
+ */
+async function startLiveChangeWatching() {
+    try {
+        await waitForPywebview();
+        const response = await pywebview.api.live_server_status();
+        if (response && response.success) {
+            lastLiveDbRevision = null;
+            if (response.running) {
+                ensureLivePolling();
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to check live server status:', error);
+    }
+}
+
+window.startLiveChangeWatching = startLiveChangeWatching;
+window.pollForLiveDatabaseChanges = pollForLiveDatabaseChanges;
+
 // Make selectedProductId globally accessible
 window.selectedProductId = selectedProductId;
 window.currentIngredientsView = currentIngredientsView;
@@ -266,17 +338,10 @@ function displayNoProductsMessage(container) {
 function handleProductsLoadError(container, error) {
     if (error.message.includes('Pywebview API not available')) {
         container.innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p><strong>API Connection Issue</strong></p>
+            <div class="empty-state-message">
+                <h3>API Connection Issue</h3>
                 <p>The database connection is not yet available.</p>
-                <button onclick="loadProductsData()" style="
-                    padding: 10px 20px; 
-                    background: #be1d2b; 
-                    color: white; 
-                    border: none; 
-                    border-radius: 5px; 
-                    cursor: pointer;
-                ">Retry</button>
+                <button onclick="loadProductsData()" class="error-state-retry">Retry</button>
             </div>
         `;
     } else {
@@ -417,18 +482,18 @@ async function createProductRow(product, index) {
         <td><span class="units-created-value">${product.original_amount || 0}</span></td>
         <td>
             <div class="product-actions">
-                <button class="product-edit-button" 
+                <button class="icon-button product-edit-button" 
                         onclick="event.stopPropagation(); editProduct(${product.id})"
                         title="Edit Batch">
                     <div class="edit-icon">
-                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                        <img src="img/svg/edit.svg" alt="Edit" />
                     </div>
                 </button>
-                <button class="product-delete-button" 
+                <button class="icon-button product-delete-button" 
                         onclick="event.stopPropagation(); confirmDeleteProduct(${product.id}, '${product.product_name}')"
                         title="Delete Product">
                     <div class="delete-icon">
-                        <img src="static/img/svg/trash.svg" alt="Delete" />
+                        <img src="img/svg/trash.svg" alt="Delete" />
                     </div>
                 </button>
             </div>
@@ -775,6 +840,7 @@ function showAmountChangeConfirmation(productId, change) {
                     // Clean up pending changes
                     pendingAmountChanges.delete(productId);
                     currentEditingProductId = null;
+                    if (window.notifySuccess) window.notifySuccess(`Batch "${change.productName}" amount updated to ${safeAmount}.`);
                 } else {
                     throw new Error(result.message || 'Failed to update product amount');
                 }
@@ -884,8 +950,26 @@ async function confirmDeleteProduct(productId, productName) {
                         await unselectCurrentProduct();
                     }
                     
+                    // Remove any staged (unsaved) amount changes for the deleted batch
+                    if (typeof batchPendingChanges === 'object' && batchPendingChanges !== null) {
+                        delete batchPendingChanges[productName];
+                    }
+                    if (typeof batchPendingMax === 'object' && batchPendingMax !== null) {
+                        delete batchPendingMax[productName];
+                    }
+                    if (typeof refreshBatchConfirmBar === 'function') {
+                        refreshBatchConfirmBar();
+                    }
+
                     // Use unified refresh function to reload data with search persistence
                     await refreshInventoryData();
+
+                    // Re-render the Products tab card list so the deleted batch disappears
+                    if (window.currentTab === 'products' && typeof window.renderProductsList === 'function') {
+                        await window.renderProductsList();
+                    }
+
+                    if (window.notifySuccess) window.notifySuccess(`Batch "${productName}" deleted.`);
                 } else {
                     throw new Error(result.message || 'Failed to delete product');
                 }

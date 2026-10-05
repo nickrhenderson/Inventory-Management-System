@@ -904,22 +904,8 @@ function collectProductFormData() {
  * @param {string} productName - Name of created product
  */
 function handleProductCreationSuccess(submitButton, barcodeResult, productName) {
-    // Hide the submit button since success message will be shown
-    submitButton.style.display = 'none';
-    
-    // Also hide the cancel button
-    const cancelButton = document.querySelector('#productModal .modal-button.cancel');
-    if (cancelButton) {
-        cancelButton.style.display = 'none';
-    }
-    
-    // Show success message without animation
-    barcodeResult.innerHTML = `
-        <div style="color: #4caf50; font-weight: 600;">${SUCCESS_MESSAGES.PRODUCT_CREATED}</div>
-        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Unit "${productName}" has been added to your inventory.</div>
-    `;
-    barcodeResult.className = 'barcode-result success show';
-    barcodeResult.style.display = 'block';
+    // Toast notification (replaces the old in-modal success message)
+    if (window.notifySuccess) window.notifySuccess(`Batch "${productName}" created successfully.`);
 
     // Product creation logs an inventory event in the DB; ensure Events will reload.
     try {
@@ -988,22 +974,8 @@ function handleProductCreationError(submitButton, barcodeResult, errorMessage) {
  * @param {string} productName - Name of updated product
  */
 function handleProductUpdateSuccess(submitButton, barcodeResult, productName) {
-    // Hide the submit button since success message will be shown
-    submitButton.style.display = 'none';
-    
-    // Also hide the cancel button
-    const cancelButton = document.querySelector('#productModal .modal-button.cancel');
-    if (cancelButton) {
-        cancelButton.style.display = 'none';
-    }
-    
-    // Show success message without animation
-    barcodeResult.innerHTML = `
-        <div style="color: #4caf50; font-weight: 600;">Unit Updated Successfully</div>
-        <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Unit "${productName}" has been updated.</div>
-    `;
-    barcodeResult.className = 'barcode-result success show';
-    barcodeResult.style.display = 'block';
+    // Toast notification (replaces the old in-modal success message)
+    if (window.notifySuccess) window.notifySuccess(`Batch "${productName}" updated successfully.`);
     
     // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
@@ -1325,7 +1297,7 @@ function collectIngredientFormData(event) {
 function handleIngredientCreationSuccess(submitButton, result) {
     console.log('Ingredient created successfully:', result);
     
-    // Hide the submit button since success message will be shown
+    // Hide the submit/cancel buttons since the modal now only shows the printable barcode
     submitButton.style.display = 'none';
     
     // Also hide the cancel button
@@ -1334,8 +1306,11 @@ function handleIngredientCreationSuccess(submitButton, result) {
         cancelButton.style.display = 'none';
     }
     
-    // Display success message with barcode
+    // Display the printable barcode for the new ingredient
     displayIngredientSuccess(result.ingredient, result.barcode_id);
+
+    // Toast notification (replaces the old in-modal success message)
+    if (window.notifySuccess) window.notifySuccess(`Ingredient "${result.ingredient.name}" created successfully.`);
     
     // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
@@ -1377,28 +1352,9 @@ function handleIngredientCreationError(submitButton, errorMessage) {
  */
 function handleIngredientUpdateSuccess(submitButton, result) {
     console.log('Ingredient updated successfully:', result);
-    
-    // Hide the submit button since success message will be shown
-    submitButton.style.display = 'none';
-    
-    // Also hide the cancel button
-    const cancelButton = document.querySelector('#ingredientModal .modal-button.cancel');
-    if (cancelButton) {
-        cancelButton.style.display = 'none';
-    }
-    
-    // Display success message (match product success message format)
-    const container = document.getElementById('ingredientBarcodeResult');
-    if (container) {
-        container.innerHTML = `
-            <div style="color: #4caf50; font-weight: 600;">Ingredient Updated Successfully</div>
-            <div style="color: var(--text-gray); font-size: 0.9em; margin-top: 8px;">Ingredient "${result.ingredient ? result.ingredient.name : 'Ingredient'}" has been updated.</div>
-        `;
-        
-        // Show the container with proper CSS classes
-        container.className = 'barcode-result success show';
-        container.style.display = 'block';
-    }
+
+    // Toast notification (replaces the old in-modal success message)
+    if (window.notifySuccess) window.notifySuccess(`Ingredient "${result.ingredient ? result.ingredient.name : 'Ingredient'}" updated successfully.`);
     
     // Use unified refresh function to reload data with search persistence
     setTimeout(async () => {
@@ -1447,12 +1403,6 @@ function displayIngredientSuccess(ingredient, barcodeId) {
         
         container.innerHTML = `
             <div class="success-message">
-                <div style="color: #4caf50; font-weight: 600; margin-bottom: 10px;">
-                    ${SUCCESS_MESSAGES.INGREDIENT_CREATED}
-                </div>
-                <div style="margin-bottom: 15px;">
-                    <strong>${ingredient.name}</strong> has been added to your inventory.
-                </div>
                 <div class="barcode-section">
                     <div style="font-weight: 600; margin-bottom: 10px;">Barcode ID: ${barcodeId}</div>
                     <div class="printable-barcode" id="printable-barcode-${barcodeId}">
@@ -1696,6 +1646,7 @@ async function handleGroupSubmission(event) {
             submitButton.textContent = '✓ Saved';
             submitButton.style.backgroundColor = '#28a745';
             submitButton.style.color = 'white';
+            if (window.notifySuccess) window.notifySuccess(`Group "${groupName}" updated successfully.`);
             setTimeout(async () => {
                 closeGroupModal();
                 window.editingGroupId = null;
@@ -1713,6 +1664,7 @@ async function handleGroupSubmission(event) {
             submitButton.textContent = '✓ Created';
             submitButton.style.backgroundColor = '#28a745';
             submitButton.style.color = 'white';
+            if (window.notifySuccess) window.notifySuccess(`Group "${groupName}" created successfully.`);
             setTimeout(async () => {
                 // Identify created group (last in array)
                 const createdGroup = window.productGroups[window.productGroups.length - 1];

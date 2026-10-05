@@ -256,14 +256,6 @@ function showConfirmationModal(title, message, confirmText, isUnflag, onConfirm,
     }
 
     /**
-     * Show a themed error notification using the info modal instead of a native alert()
-     * @param {string} message - Error message to display
-     */
-    function notifyError(message) {
-        showInfoModal('Error', message, 'OK');
-    }
-
-    /**
      * Show a themed confirmation modal
      * @param {string} title - Modal title
      * @param {string} message - Modal message
@@ -408,7 +400,6 @@ async function confirmAction() {
     window.hideThemedConfirmationModal = hideThemedConfirmationModal;
     window.cancelThemedConfirmationAction = cancelThemedConfirmationAction;
     window.confirmThemedConfirmationAction = confirmThemedConfirmationAction;
-    window.notifyError = notifyError;
     
     if (confirmButton) {
         // Disable confirm button immediately
@@ -466,20 +457,12 @@ function createLoadingHTML(text) {
  */
 function createErrorHTML(message, retryFunction = null) {
     const retryButton = retryFunction ? `
-        <button onclick="${retryFunction}()" style="
-            padding: 10px 20px; 
-            background: #be1d2b; 
-            color: white; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer;
-            margin-top: 10px;
-        ">Retry</button>
+        <button onclick="${retryFunction}()" class="error-state-retry">Retry</button>
     ` : '';
     
     return `
-        <div style="text-align: center; padding: 20px;">
-            <p><strong>Error</strong></p>
+        <div class="empty-state-message">
+            <h3>Error</h3>
             <p>${message}</p>
             ${retryButton}
         </div>
@@ -526,29 +509,40 @@ function showContextMenu(x, y) {
         return;
     }
     
+    // Show the menu first (hidden elements have no dimensions we can measure)
+    contextMenu.classList.add('show');
+    contextMenuVisible = true;
+    
+    // Measure the actual rendered menu size
+    const menuWidth = contextMenu.offsetWidth;
+    const menuHeight = contextMenu.offsetHeight;
+    
     // Get viewport dimensions
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     
-    // Get menu dimensions (approximate)
-    const menuWidth = 180;
-    const menuHeight = 80; // Approximate height for 2 items
+    // Small padding so the menu doesn't sit flush against the viewport edge
+    const edgePadding = 4;
     
-    // Adjust position to keep menu on screen
+    // Determine horizontal position: default to the top-left of the cursor.
+    // If the menu would overflow the right edge, flip to render on the LEFT of the cursor.
     let adjustedX = x;
+    if (x + menuWidth + edgePadding > viewportWidth) {
+        adjustedX = x - menuWidth - edgePadding;
+    }
+    
+    // Determine vertical position:
+    //   - Default to BOTTOM-right of the cursor (top of the menu at the cursor's Y).
+    //   - If the menu would overflow the bottom of the viewport, move it so it
+    //     appears ABOVE the cursor (menu's bottom at the cursor's Y).
     let adjustedY = y;
-    
-    if (x + menuWidth > viewportWidth) {
-        adjustedX = x - menuWidth;
+    if (y + menuHeight + edgePadding > viewportHeight) {
+        adjustedY = y - menuHeight - edgePadding;
     }
     
-    if (y + menuHeight > viewportHeight) {
-        adjustedY = y - menuHeight;
-    }
-    
-    // Ensure menu doesn't go off the left or top edges
-    adjustedX = Math.max(0, adjustedX);
-    adjustedY = Math.max(0, adjustedY);
+    // Clamp so the menu never goes off the left or top edges.
+    adjustedX = Math.max(edgePadding, adjustedX);
+    adjustedY = Math.max(edgePadding, adjustedY);
     
     // Position the menu
     contextMenu.style.left = adjustedX + 'px';
@@ -556,10 +550,6 @@ function showContextMenu(x, y) {
     
     // Store the menu position for distance calculation
     contextMenuPosition = { x: adjustedX, y: adjustedY };
-    
-    // Show the menu
-    contextMenu.classList.add('show');
-    contextMenuVisible = true;
     
     console.log('Context menu shown at:', adjustedX, adjustedY);
 }
@@ -585,9 +575,13 @@ window.hideContextMenu = hideContextMenu;
  */
 function handleContextMenu(event) {
     console.log('Context menu event triggered', event.target, event.clientX, event.clientY);
-    
+
+    // Right-clicking an event header should always show the custom menu
+    // (with "Edit Event"), even when the click lands on its collapse button.
+    const onEventHeader = !!(event.target.closest?.('.event-group-header'));
+
     // Don't show context menu if clicking on interactive elements
-    if (event.target.closest('.ingredient-menu, .context-menu, button, input, select, textarea, .modal-content')) {
+    if (!onEventHeader && event.target.closest('.ingredient-menu, .context-menu, button, input, select, textarea, .modal-content')) {
         console.log('Context menu blocked - on interactive element');
         return;
     }
@@ -609,9 +603,28 @@ function handleContextMenu(event) {
             addToGroupItem.style.display = 'none';
         }
     }
-    
+
+    // Track which event group was right-clicked (if any) for "Edit Event"
+    const eventGroup = event.target.closest('.event-group');
+    window.contextMenuEventGroupId = eventGroup ? eventGroup.dataset.eventId : null;
+    // Right-clicking the group header (or its children) means "edit this event"
+    window.contextMenuOnEventHeader = !!(eventGroup && event.target.closest('.event-group-header'));
+
     if (typeof window.toggleContextMenuItemsForTab === 'function') {
         window.toggleContextMenuItemsForTab(window.currentTab);
+    }
+
+    // Show "Edit Event" only when an event group was right-clicked.
+    // When the header itself was right-clicked, show ONLY Edit (no Add Event).
+    // The "Add Event" item should only ever appear on the Events tab.
+    const editEventItem = document.getElementById('editEventMenuItem');
+    const addEventItem = document.querySelector('.context-menu-item.events-only:not(#editEventMenuItem)');
+    if (eventGroup && window.currentTab === 'events') {
+        if (editEventItem) editEventItem.style.display = '';
+        if (addEventItem) addEventItem.style.display = window.contextMenuOnEventHeader ? 'none' : '';
+    } else {
+        if (editEventItem) editEventItem.style.display = 'none';
+        if (addEventItem) addEventItem.style.display = window.currentTab === 'events' ? '' : 'none';
     }
 
     // Prevent default context menu

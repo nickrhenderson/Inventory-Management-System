@@ -1,15 +1,15 @@
 document.addEventListener('DOMContentLoaded', function () {
     const scripts = [
-        { src: "static/scripts/constants.js", isModule: false },
-        { src: "static/scripts/utils.js", isModule: false },
-        { src: "static/scripts/google_drive.js", isModule: false },
-        { src: "static/scripts/groups.js", isModule: false },
-        { src: "static/scripts/search.js", isModule: false },
-        { src: "static/scripts/ingredients.js", isModule: false },
-        { src: "static/scripts/products.js", isModule: false },
-        { src: "static/scripts/modals.js", isModule: false },
-        { src: "static/scripts/events.js", isModule: false },
-        { src: "static/scripts/inventory.js", isModule: false }
+        { src: "scripts/constants.js", isModule: false },
+        { src: "scripts/utils.js", isModule: false },
+        { src: "scripts/google_drive.js", isModule: false },
+        { src: "scripts/groups.js", isModule: false },
+        { src: "scripts/search.js", isModule: false },
+        { src: "scripts/ingredients.js", isModule: false },
+        { src: "scripts/products.js", isModule: false },
+        { src: "scripts/modals.js", isModule: false },
+        { src: "scripts/events.js", isModule: false },
+        { src: "scripts/inventory.js", isModule: false }
     ];
 
     function loadScript({ src, isModule }) {

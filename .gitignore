@@ -1,15 +1,21 @@
-# Build and executable files
-build_exe.py
-dist/
-build/
+# Executables and build specs (safety net, in case any land at the root)
 *.exe
 *.spec
 
-# Database and data files
-data/
+# Database files (safety net; runtime DB lives under dev/data which is ignored via dev/)
 *.db
 *.sqlite
 *.sqlite3
+
+# Preconfigured build config files (e.g. Google OAuth client)
+configs/
+
+# Local dev environment: build outputs, runtime dev data, and dev utilities
+#   dev/build_out/  <-- PyInstaller intermediate work files
+#   dev/dist/       <-- final standalone .exe
+#   dev/data/       <-- runtime dev database / settings / product images
+#   dev/utils/      <-- dev-only scripts (build_exe.py, test_*.py, etc.)
+dev/
 
 # Python cache and compiled files
 __pycache__/
@@ -39,7 +45,7 @@ desktop.ini
 *.tmp
 *.temp
 *.log
-*.txt
+to-do.txt
 
 # PyInstaller specific
 *.manifest

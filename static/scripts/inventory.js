@@ -33,6 +33,13 @@ async function initializeApp() {
     
     // Load products data (silently loads in background)
     await loadProductsData();
+
+    // If the phone live server is already active (e.g. app restarted while it
+    // was still running), start watching the DB so phone changes auto-refresh
+    // the desktop UI.
+    if (typeof window.startLiveChangeWatching === 'function') {
+        window.startLiveChangeWatching();
+    }
 }
 
 /**

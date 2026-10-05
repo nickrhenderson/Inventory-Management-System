@@ -1,1 +1,0 @@
-// Settings functionality has been removed

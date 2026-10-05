@@ -117,7 +117,7 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
     // Create menu items based on available actions
     const menuItems = [
         `<div class="ingredient-menu-item" onclick="editIngredient(${ingredient.id}); closeIngredientMenu(${ingredient.id})">
-            <img src="static/img/svg/edit.svg" alt="Edit" class="menu-icon" />
+                <img src="img/svg/edit.svg" alt="Edit" class="menu-icon" />
             <span>Edit Ingredient</span>
         </div>`,
         `<div class="ingredient-menu-item" onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged}); closeIngredientMenu(${ingredient.id})">
@@ -133,7 +133,7 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
     // Add delete button if applicable
     if (showDeleteButton) {
         menuItems.push(`<div class="ingredient-menu-item danger" onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}'); closeIngredientMenu(${ingredient.id})">
-            <img src="static/img/svg/trash.svg" alt="Delete" class="menu-icon" />
+                <img src="img/svg/trash.svg" alt="Delete" class="menu-icon" />
             <span>Delete Ingredient</span>
         </div>`);
     }
@@ -142,10 +142,10 @@ function createIngredientItemHTML(ingredient, isFlagged, flaggedClass, flaggedBu
         <div class="ingredient-item${flaggedClass}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
                 <div class="ingredient-menu-container">
-                    <button class="ingredient-menu-button" 
+                    <button class="icon-button ingredient-menu-button" 
                             onclick="toggleIngredientMenu(${ingredient.id})"
                             title="More actions">
-                        <img src="static/img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
+                        <img src="img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
                     </button>
                     <div class="ingredient-menu" id="ingredientMenu${ingredient.id}">
                         ${menuItems.join('')}
@@ -344,18 +344,10 @@ function displayNoIngredientsMessage(rightContainer, totalContainer) {
  */
 function displayIngredientsError(rightContainer, totalContainer) {
     rightContainer.innerHTML = `
-        <div style="text-align: center; color: var(--text-gray); padding: 40px 24px;">
+        <div class="empty-state-message">
             <h3>Error Loading Ingredients</h3>
             <p>Unable to load ingredients. Please try refreshing the page.</p>
-            <button onclick="displayAllIngredients()" style="
-                padding: 10px 20px; 
-                background: #be1d2b; 
-                color: white; 
-                border: none; 
-                border-radius: 5px; 
-                cursor: pointer;
-                margin-top: 10px;
-            ">Retry</button>
+            <button onclick="displayAllIngredients()" class="error-state-retry">Retry</button>
         </div>
     `;
     totalContainer.style.display = 'none';
@@ -403,7 +395,7 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
     // Create menu items for all ingredient actions
     const menuItems = [
         `<div class="ingredient-menu-item" onclick="editIngredient(${ingredient.id}); closeIngredientMenu(${ingredient.id})">
-            <img src="static/img/svg/edit.svg" alt="Edit" class="menu-icon" />
+            <img src="img/svg/edit.svg" alt="Edit" class="menu-icon" />
             <span>Edit Ingredient</span>
         </div>`,
         `<div class="ingredient-menu-item" onclick="toggleIngredientFlag(${ingredient.id}, '${ingredient.name}', ${isFlagged}); closeIngredientMenu(${ingredient.id})">
@@ -415,7 +407,7 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
             <span>${isFlagged ? 'Remove Flag' : 'Flag Ingredient'}</span>
         </div>`,
         `<div class="ingredient-menu-item danger" onclick="confirmDeleteIngredient(${ingredient.id}, '${ingredient.name}'); closeIngredientMenu(${ingredient.id})">
-            <img src="static/img/svg/trash.svg" alt="Delete" class="menu-icon" />
+            <img src="img/svg/trash.svg" alt="Delete" class="menu-icon" />
             <span>Delete Ingredient</span>
         </div>`
     ];
@@ -424,10 +416,10 @@ function createAllIngredientItemHTML(ingredient, isFlagged, flaggedClass, flagge
         <div class="ingredient-item all-ingredient${flaggedClass} ${INVENTORY_CONFIG.CSS_CLASSES.INVENTORY_ROW_HIDDEN}" data-ingredient-id="${ingredient.id}">
             <div class="ingredient-actions">
                 <div class="ingredient-menu-container">
-                    <button class="ingredient-menu-button" 
+                    <button class="icon-button ingredient-menu-button" 
                             onclick="toggleIngredientMenu(${ingredient.id})"
                             title="More actions">
-                        <img src="static/img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
+                        <img src="img/svg/dots-vertical.svg" alt="More actions" class="dots-icon" />
                     </button>
                     <div class="ingredient-menu" id="ingredientMenu${ingredient.id}">
                         ${menuItems.join('')}
@@ -544,6 +536,7 @@ async function toggleIngredientFlag(ingredientId, ingredientName, isCurrentlyFla
                 if (result.success) {
                     // Use unified refresh function to reload data with search persistence
                     await refreshInventoryData();
+                    if (window.notifySuccess) window.notifySuccess(isCurrentlyFlagged ? `Flag removed from "${ingredientName}".` : `"${ingredientName}" flagged.`);
                 } else {
                     throw new Error(result.message || ERROR_MESSAGES.TOGGLE_FLAG_FAILED);
                 }
@@ -605,6 +598,7 @@ async function confirmDeleteIngredient(ingredientId, ingredientName) {
                     }
                     // Use unified refresh function to reload data with search persistence
                     await refreshInventoryData();
+                    if (window.notifySuccess) window.notifySuccess(`Ingredient "${ingredientName}" deleted.`);
                 } else {
                     throw new Error(result.message || 'Failed to delete ingredient');
                 }

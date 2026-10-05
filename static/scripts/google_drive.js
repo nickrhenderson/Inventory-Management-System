@@ -136,6 +136,15 @@ function startGoogleDriveClock() {
 }
 
 function showGoogleDriveInfo(title, message, onClose) {
+    const isError = /error|fail/i.test(title);
+    if (!isError && typeof window.notifySuccess === 'function') {
+        window.notifySuccess(message);
+        return;
+    }
+    if (isError && typeof window.notifyError === 'function') {
+        window.notifyError(message);
+        return;
+    }
     if (typeof showInfoModal === 'function') {
         showInfoModal(title, message, 'OK', onClose);
     } else {
@@ -412,9 +421,16 @@ async function downloadLatestGoogleDriveBackup() {
             if (response && response.success) {
                 closeGoogleDriveMenu();
                 const message = response.message || 'Latest Google Drive backup downloaded and restored';
-                showGoogleDriveInfo('Google Drive Backup', message, () => {
-                    window.location.reload();
-                });
+                if (typeof window.notifySuccess === 'function') {
+                    window.notifySuccess(message);
+                } else if (typeof showInfoModal === 'function') {
+                    showInfoModal('Google Drive Backup', message, 'OK', () => {
+                        window.location.reload();
+                    });
+                    return response;
+                }
+                // Reload after a short delay so the toast is visible
+                setTimeout(() => window.location.reload(), 1200);
                 return response;
             }
             throw new Error((response && response.message) || 'Restore failed');

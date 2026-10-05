@@ -20,7 +20,13 @@ BACKUP_MIME_TYPE = "application/x-sqlite3"
 GOOGLE_OAUTH_CONFIG_FILENAME = "google_oauth_client.json"
 
 def _load_google_auth_config(data_dir):
+	# 1. Writable data dir (user may have dropped a config there).
 	config_paths = [os.path.join(data_dir, GOOGLE_OAUTH_CONFIG_FILENAME)]
+	# 2. Source configs/ folder (canonical copy used when building).
+	#    resolve the package's project root: services/.. == project root.
+	project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+	config_paths.append(os.path.join(project_root, "configs", GOOGLE_OAUTH_CONFIG_FILENAME))
+	# 3. Bundled config inside the PyInstaller payload.
 	if getattr(sys, "frozen", False):
 		config_paths.append(os.path.join(sys._MEIPASS, GOOGLE_OAUTH_CONFIG_FILENAME))
 

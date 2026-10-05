@@ -117,9 +117,10 @@
             opacity: 1;
         }
     </style>
-    <link rel="stylesheet" href="static/styles.css">
-    <script src="static/theme.js" defer></script>
-    <script src="static/main.js" defer></script>
+    <link rel="stylesheet" href="styles.css">
+    <script src="scripts/theme.js" defer></script>
+    <script src="scripts/notifications.js" defer></script>
+    <script src="main.js" defer></script>
     <script>
         const pageLoadStart = Date.now();
         let stylesReady = false;
@@ -243,14 +244,19 @@
     <div class="app-shell">
     <!-- Top Navigation Bar -->
     <header class="top-bar">
+        <nav class="tabs" id="mainTabs">
+            <button class="tab active" data-tab="inventory">Batches</button>
+            <button class="tab" data-tab="products">Product</button>
+            <button class="tab" data-tab="events">Events</button>
+        </nav>
         <div class="search-container">
             <input class="search-bar" type="text" placeholder="Search..." autocomplete="off">
             <div class="search-icon">
-                <img src="static/img/svg/magnifyglass.svg" alt="Search" />
+                <img src="img/svg/magnifyglass.svg" alt="Search" />
             </div>
         </div>
             <button class="top-bar-button drive-button" title="Google Drive Backup" id="googleDriveButton" aria-label="Google Drive backup" aria-haspopup="menu" type="button">
-                <img src="static/img/svg/database.svg" alt="Google Drive backup" class="drive-button-icon" />
+                <img src="img/svg/database.svg" alt="Google Drive backup" class="drive-button-icon" />
             </button>
             <button class="top-bar-button theme-switch-button" title="Toggle Theme" id="themeToggleButton" aria-label="Toggle theme" type="button">
                 <span class="theme-switch-slider round" aria-hidden="true">
@@ -259,13 +265,13 @@
                 </span>
             </button>
         <button class="top-bar-button version-button" title="Version" id="versionButton">
-            v0.3.3
+            v0.0.0
         </button>
         <div id="googleDriveMenu" class="google-drive-menu" role="menu" aria-hidden="true">
             <div class="google-drive-menu-item">
                 <button type="button" class="google-drive-menu-action" data-drive-action="backup" role="menuitem">
                 <span class="google-drive-menu-item-main">
-                    <img src="static/img/svg/upload.svg" alt="Backup" class="menu-icon" />
+                    <img src="img/svg/upload.svg" alt="Backup" class="menu-icon" />
                     <span>Backup</span>
                 </span>
                 </button>
@@ -278,7 +284,7 @@
             </div>
             <button type="button" class="google-drive-menu-item" data-drive-action="download" role="menuitem">
                 <span class="google-drive-menu-item-main">
-                    <img src="static/img/svg/download.svg" alt="Download" class="menu-icon" />
+                    <img src="img/svg/download.svg" alt="Download" class="menu-icon" />
                     <span>Download</span>
                 </span>
                 <span class="google-drive-menu-item-meta" data-drive-meta="download">No backup yet</span>
@@ -291,13 +297,6 @@
         </div>
     </header>
 
-    <!-- Tabs -->
-    <nav class="tabs" id="mainTabs">
-        <button class="tab active" data-tab="inventory">Batches</button>
-        <button class="tab" data-tab="products">Product</button>
-        <button class="tab" data-tab="events">Events</button>
-    </nav>
-    
     <!-- Main Application Content -->
     <main class="main">
         <!-- Inventory View -->
@@ -338,23 +337,27 @@
     <!-- Context Menu -->
     <div class="context-menu" id="contextMenu">
         <div class="context-menu-item inventory-only" onclick="openProductModal(); hideContextMenu()">
-            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <img src="img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Batch</span>
         </div>
         <div class="context-menu-item inventory-only" onclick="openIngredientModal(); hideContextMenu()">
-            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <img src="img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Ingredient</span>
         </div>
         <div class="context-menu-item inventory-only" onclick="openGroupModal(); hideContextMenu()">
-            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <img src="img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Create Group</span>
         </div>
+        <div class="context-menu-item events-only" id="editEventMenuItem" onclick="openEventEditModalFromContext(); hideContextMenu()" style="display:none;">
+            <img src="img/svg/edit.svg" alt="Edit" class="menu-icon" />
+            <span>Edit Event</span>
+        </div>
         <div class="context-menu-item events-only" onclick="openEventModal(); hideContextMenu()" style="display:none;">
-            <img src="static/img/svg/plus.svg" alt="Add" class="menu-icon" />
+            <img src="img/svg/plus.svg" alt="Add" class="menu-icon" />
             <span>Add Event</span>
         </div>
         <div class="context-menu-item products-only" onclick="openPhoneConnectModal(); hideContextMenu()" style="display:none;">
-            <img src="static/img/svg/phone.svg" alt="Phone" class="menu-icon" />
+            <img src="img/svg/phone.svg" alt="Phone" class="menu-icon" />
             <span>Connect Phone</span>
         </div>
         <div class="context-menu-divider"></div>
@@ -425,7 +428,13 @@
         <div class="modal-content phone-connect-modal" onclick="event.stopPropagation()">
             <button class="modal-close-button" onclick="closePhoneConnectModal()" title="Close">×</button>
             <h3>Connect Phone</h3>
+            <p class="phone-connect-hint">Scan with your phone camera to open the live inventory page on this network.</p>
             <div id="phoneConnectQr" class="phone-connect-qr" aria-label="Pairing QR code"></div>
+            <div id="phoneConnectStatus" class="phone-connect-status" role="status"></div>
+            <div class="phone-connect-actions">
+                <button type="button" id="phoneConnectRefresh" class="modal-button submit" onclick="refreshPhoneConnectQr()">New Code</button>
+                <button type="button" id="phoneConnectStop" class="modal-button cancel" onclick="stopPhoneConnect()" style="display:none;">Stop Server</button>
+            </div>
         </div>
     </div>
 
@@ -502,6 +511,10 @@
                     <input type="text" id="eventTitle" name="eventTitle" placeholder="Adjustment, Restock, etc." required>
                 </div>
                 <div class="form-group">
+                    <label for="eventMemo">Memo / Notes (optional):</label>
+                    <textarea id="eventMemo" name="eventMemo" rows="2" placeholder="What was this event for? e.g. 'Restocking for weekend market'"></textarea>
+                </div>
+                <div class="form-group">
                     <label for="eventProductSelection">Select Products:</label>
                     <div class="event-product-selector" id="eventProductSelector"></div>
                 </div>
@@ -513,6 +526,61 @@
             </form>
         </div>
     </div>
+
+    <!-- Event Edit Modal -->
+    <div class="modal-backdrop creation-modal-backdrop" id="eventEditModalBackdrop" onclick="closeEventEditModal()" style="display:none;">
+        <div class="modal-content creation-modal" id="eventEditModal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeEventEditModal()" title="Close">×</button>
+            <h3>Edit Event</h3>
+            <form id="eventEditForm">
+                <div class="form-group">
+                    <label for="eventEditDate">Event Date:</label>
+                    <input type="date" id="eventEditDate" name="eventEditDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventEditTitle">Title:</label>
+                    <input type="text" id="eventEditTitle" name="eventEditTitle" placeholder="Adjustment, Restock, etc." required>
+                </div>
+                <div class="form-group">
+                    <label for="eventEditMemo">Memo / Notes:</label>
+                    <textarea id="eventEditMemo" name="eventEditMemo" rows="3" placeholder="What was this event for? e.g. 'Restocking for weekend market'"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="modal-button cancel" onclick="closeEventEditModal()">Cancel</button>
+                    <button type="submit" class="modal-button submit" id="submitEventEditButton">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    </div>
+
+    <!-- Toast notification container -->
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <!-- Batch-edit event memo prompt (products tab) -->
+    <div class="modal-backdrop creation-modal-backdrop" id="batchMemoModalBackdrop" onclick="closeBatchMemoModal()" style="display:none;">
+        <div class="modal-content creation-modal" onclick="event.stopPropagation()">
+            <button class="modal-close-button" onclick="closeBatchMemoModal()" title="Close">×</button>
+            <h3>Event Memo</h3>
+            <p class="batch-memo-hint">Add a memo to record what this manual adjustment was for. It will be attached as a separate event for each changed product.</p>
+            <div class="form-group">
+                <label for="batchMemoInput">Memo / Notes (optional):</label>
+                <textarea id="batchMemoInput" name="batchMemoInput" rows="3" placeholder="e.g. 'Restocking for weekend market'"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="modal-button cancel" onclick="closeBatchMemoModal()">Cancel</button>
+                <button type="button" class="modal-button submit" id="batchMemoApplyBtn" onclick="applyBatchMemo()">Confirm Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating batched-edit confirm bar (products tab) -->
+    <div id="batchConfirmBar" class="batch-confirm-bar">
+        <span id="batchConfirmCount" class="batch-confirm-count"></span>
+        <div class="batch-confirm-actions">
+            <button type="button" id="batchConfirmCancel" class="batch-confirm-button cancel">Cancel</button>
+            <button type="button" id="batchConfirmApply" class="batch-confirm-button apply">Confirm</button>
+        </div>
     </div>
 </body>
 </html>

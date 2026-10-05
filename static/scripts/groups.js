@@ -357,10 +357,10 @@ function createGroupElement(group, animate = true) {
         <span class="group-count">(${group.productIds.length})</span>
         <div class="group-actions">
             <button class="group-action-btn" onclick="event.stopPropagation(); openEditGroupModal(${group.id})" title="Edit Group">
-                <img src="static/img/svg/edit.svg" alt="Edit" />
+                <img src="img/svg/edit.svg" alt="Edit" />
             </button>
             <button class="group-action-btn" onclick="event.stopPropagation(); confirmDeleteGroup(${group.id}, '${escapeHtml(group.name)}')" title="Delete Group">
-                <img src="static/img/svg/trash.svg" alt="Delete" />
+                <img src="img/svg/trash.svg" alt="Delete" />
             </button>
         </div>
     `;
@@ -449,24 +449,37 @@ function createProductRowSync(product, index, animate = true) {
         <td><span class="units-created-value">${product.original_amount || 0}</span></td>
         <td>
             <div class="product-actions">
-                <button class="product-edit-button" 
+                <button class="icon-button product-edit-button" 
                         onclick="event.stopPropagation(); editProduct(${product.id})"
                         title="Edit Batch">
                     <div class="edit-icon">
-                        <img src="static/img/svg/edit.svg" alt="Edit" />
+                        <img src="img/svg/edit.svg" alt="Edit" />
                     </div>
                 </button>
-                <button class="product-delete-button" 
+                <button class="icon-button product-delete-button" 
                         onclick="event.stopPropagation(); confirmDeleteProduct(${product.id}, '${product.product_name}')"
                         title="Delete Product">
                     <div class="delete-icon">
-                        <img src="static/img/svg/trash.svg" alt="Delete" />
+                        <img src="img/svg/trash.svg" alt="Delete" />
                     </div>
                 </button>
             </div>
         </td>
     `;
     
+    // Check if product has flagged ingredients (non-blocking, matches products.js behavior)
+    if (typeof pywebview !== 'undefined' && pywebview.api) {
+        pywebview.api.check_product_has_flagged_ingredients(product.id)
+            .then(hasFlaggedIngredients => {
+                if (hasFlaggedIngredients) {
+                    row.classList.add(INVENTORY_CONFIG.CSS_CLASSES.FLAGGED_PRODUCT);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking flagged ingredients for product:', product.id, error);
+            });
+    }
+
     // Add click handler for row selection
     row.addEventListener('click', () => selectProduct(product.id));
 
@@ -1389,7 +1402,7 @@ function buildTooltipHTML(values) {
     values.forEach(v => {
         rows += `<tr><td class="param-name">${escapeHtml(v.name)}</td><td class="param-value">${escapeHtml(v.value || '-')}</td></tr>`;
     });
-    return `<h4><span class="param-title-icon"><img src="static/img/svg/info.svg" alt="Info" /></span>Custom Fields</h4><table>${rows}</table>`;
+    return `<span class="popup-tooltip-label">Custom Fields</span><table>${rows}</table>`;
 }
 
 // Invalidate cached parameter data for a product and hide tooltip if it's showing

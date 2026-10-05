@@ -80,34 +80,12 @@
         opacity: 1;
         transform: translateY(0);
     }
-    .product-parameter-tooltip h4 {
-        margin: 0 0 8px 0;
-        font-size: var(--font-size-sm);
-        font-weight: 600;
-        color: var(--loading-accent);
-        border-bottom: 2px solid var(--loading-accent);
-        padding-bottom: 6px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .product-parameter-tooltip .param-title-icon img {
-        width: 14px;
-        height: 14px;
-        display: block;
-        filter: opacity(.85);
-        transition: filter .2s ease;
-    }
-    .product-parameter-tooltip.visible .param-title-icon img {
-        filter: opacity(1);
-    }
     .product-parameter-tooltip table {
         width: 100%;
         border-collapse: collapse;
     }
     .product-parameter-tooltip td {
-        padding: 4px 6px;
-        border-bottom: 1px solid #eee;
+        padding: 4px 0;
         vertical-align: top;
         font-size: var(--font-size-13px);
     }
@@ -118,10 +96,12 @@
         font-weight: 600;
         color: var(--text-gray);
         width: 35%;
+        padding-right: 12px;
     }
     .product-parameter-tooltip td.param-value {
         color: var(--text-primary);
         word-break: break-word;
+        padding-left: 12px;
     }
 
     /* Border Radius */
@@ -184,72 +164,88 @@ body {
     flex-direction: column;
 }
 
+/* ============================================
+   Tabs & stacking
+   --------------------------------------------------
+   The tabs now live INSIDE the top bar (on the same
+   row as the search bar), positioned absolutely on the
+   left. This lets the content boxes extend up to sit
+   flush beneath the top bar, reclaiming the vertical
+   space that a separate tab row used to occupy.
+   - The .tabs container is position:absolute, bottom:-1px
+     so the tab bottoms overlap the box top edge by 1px.
+   - The container has NO z-index and no stacking context,
+     so each .tab's own z-index competes directly with the
+     boxes in the page stacking context:
+
+       unselected tabs (3,2,1) sit BEHIND .box.left (5),
+       so the box top border paints over their bottoms
+       (visual separation), while the active tab (6) floats
+       ABOVE the box and merges with it.
+   - Within the container, the folder-stack effect is kept:
+     each tab's right edge tucks under its right-hand neighbor
+     by margin-right:-10px, and z drops left->right (3,2,1)
+     so the left tab paints over the right tab's tucked edge.
+     The active tab (6) always pops out in front.
+   - The active tab overlaps the box top edge by 1px and
+     shares the box background, so it "hides" the left box's
+     top border underneath it: one smooth surface.
+   - Selecting a tab smoothly shrinks the old one / grows
+     the new one (padding, font-size, margin-top animated).
+   ============================================ */
 .tabs {
+    position: absolute; /* no z-index: absolute + z auto does NOT create a stacking
+                           context, so each .tab's z-index competes with .box directly */
+    left: var(--padding-base);
+    bottom: -1px; /* tab bottoms overlap the box top edge by 1px so active tab merges */
     display: flex;
+    align-items: flex-end; /* bottoms aligned; tabs grow/shrink upward */
     gap: 0;
-    margin: 10px 0 -1px; /* overlap box border so tab bottom touches box top */
-    position: relative;
-    padding-left: 0;
-    margin-left: 0;
-    z-index: 3; /* sit above the box */
-    align-items: flex-end; /* keep tab bottoms aligned to stop layout jump */
-    height: 52px; /* fixed bar height to prevent box shift when switching */
+    height: 52px; /* fixed bar height to prevent tab shift when switching */
 }
 .tab {
-    padding: 10px 24px;
+    padding: 8px 22px 10px;
+    margin-right: -10px; /* natural overlap: tuck under the tab to the right */
+    margin-top: 0; /* base position; inactive tabs drop down a few px */
     border: 1px solid var(--border-gray);
     background: linear-gradient(to bottom, #f5f5f5, #e8e8e8);
     border-radius: 12px 12px 0 0;
+    border-bottom: none;
     cursor: pointer;
     position: relative;
-    transition: all 0.2s ease;
     font-weight: 500;
+    font-size: 0.85em; /* unselected tabs are smaller */
+    letter-spacing: 0.02em;
     color: #666;
-    border-bottom: none;
-    margin-right: -8px;
-    z-index: 1;
-    transform: perspective(100px) rotateX(2deg);
-    transform-origin: bottom;
-    box-shadow: none; /* remove shadow under tabs */
+    box-shadow: none;
+    /* Smooth shrink / grow between selected and unselected states */
+    transition: padding 0.25s ease, font-size 0.25s ease, margin-top 0.25s ease,
+                background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+.tab:last-child {
+    margin-right: 0; /* nothing to tuck under after the last tab */
 }
 .tab:not(.active) {
-    margin-top: 4px;
-    padding-top: 8px;
+    padding-top: 6px; /* shorter than the active tab */
     padding-bottom: 8px;
-    opacity: 0.85;
+    margin-top: 4px; /* sit slightly lower than the active tab */
+    color: #777;
 }
 .tab.active {
     background: var(--bg-white);
     color: #000;
     border-color: var(--border-gray);
-    z-index: 2;
-    transform: perspective(100px) rotateX(0deg);
-    box-shadow: none; /* remove shadow under active tab */
-    margin-top: 0;
-    padding-bottom: 12px;
+    font-size: 1em; /* selected tab is larger */
+    padding: 10px 26px 12px; /* taller padding so it stands proud */
+    margin-top: 0; /* raised to the top of the bar */
+    box-shadow: none;
 }
-#mainTabs .tab:nth-child(1) {
-    z-index: 3;
-}
-#mainTabs .tab:nth-child(2) {
-    z-index: 2;
-}
-#mainTabs .tab:nth-child(3) {
-    z-index: 1;
-}
-#mainTabs .tab.active {
-    z-index: 4;
-}
-.tab:hover:not(.active) {
-    background: linear-gradient(to bottom, #fafafa, #ececec);
-    /* Lift without creating a gap: increase height upwards via padding */
-    padding-bottom: 10px;
-}
-
-.tab.active:hover {
-    /* Lift without creating a gap: increase height upwards via padding */
-    padding-bottom: 14px;
-}
+/* Unselected tabs: left -> right, high z -> low z */
+#mainTabs .tab:nth-child(1) { z-index: 3; }
+#mainTabs .tab:nth-child(2) { z-index: 2; }
+#mainTabs .tab:nth-child(3) { z-index: 1; }
+/* Selected tab always has the highest index */
+#mainTabs .tab.active { z-index: 6; }
 
 .tab-view {
     display: flex;
@@ -312,8 +308,18 @@ body {
     border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
 }
 
+/* ============================================
+   Accent-bar pattern (4px left accent bar + rounded-right container)
+   Shared by: event/product group headers, product cards,
+   ingredient items, selected-ingredient rows, and
+   selected ingredient options in the batch modal
+   ============================================ */
 .event-group-header::before,
-.product-group-header::before {
+.product-group-header::before,
+.product-card::before,
+.ingredient-item::before,
+.selected-ingredient-item::before,
+.ingredient-option.selected-in-edit::before {
     content: '';
     position: absolute;
     top: 0;
@@ -380,6 +386,49 @@ body {
 
 .event-summary-remove {
     color: var(--color-danger);
+}
+
+/* Shared popup label used by the memo and custom-fields tooltips for consistent styling */
+.popup-tooltip-label {
+    display: block;
+    font-weight: 700;
+    font-size: var(--font-size-12px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--loading-accent);
+    margin-bottom: 6px;
+}
+
+.event-memo-tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 5000;
+    background: var(--bg-white);
+    border: 1px solid var(--border-light-gray);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: var(--font-size-13px);
+    color: var(--text-primary);
+    max-width: 320px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity .15s ease, transform .15s ease;
+    backdrop-filter: blur(4px);
+}
+
+.event-memo-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.event-memo-tooltip .event-memo-tooltip-text {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.45;
 }
 
 .event-group-content {
@@ -534,16 +583,6 @@ html[data-theme="dark"] .event-product-delta {
     font-size: var(--font-size-sm);
     color: var(--text-gray);
     white-space: nowrap;
-}
-.event-product-row {
-    display: grid;
-    grid-template-columns: 1fr 100px 120px 40px;
-    gap: 6px;
-    align-items: center;
-}
-.event-product-row select,
-.event-product-row input {
-    width: 100%;
 }
 
 /* Common button styles */
@@ -779,54 +818,11 @@ html[data-theme="dark"] .google-drive-auto-backup-countdown {
     background-color: #fff5f5;
 }
 
-.google-drive-menu-item .menu-icon {
-    width: 16px;
-    height: 16px;
-    filter: opacity(0.7);
-    flex-shrink: 0;
-}
-
-.google-drive-menu-item:hover .menu-icon {
-    filter: opacity(1);
-}
-
-.google-drive-menu::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    right: 8px;
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 6px solid #ddd;
-}
-
-.google-drive-menu::after {
-    content: '';
-    position: absolute;
-    top: -5px;
-    right: 8px;
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 6px solid white;
-}
-
 html[data-theme="dark"] .google-drive-menu {
     background: var(--bg-white);
     border-color: var(--border-gray);
     color: var(--text-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-html[data-theme="dark"] .google-drive-menu::before {
-    border-bottom-color: var(--border-gray);
-}
-
-html[data-theme="dark"] .google-drive-menu::after {
-    border-bottom-color: var(--bg-white);
 }
 
 html[data-theme="dark"] .google-drive-menu-item {
@@ -1166,7 +1162,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     align-items: center;
     transition: transform 0.2s ease;
     transform-origin: center;
-    width: 350px;
+    width: calc(40% - 7.5px);
     height: 40px;
     border-radius: 20px;
     overflow: hidden;
@@ -1174,7 +1170,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 .search-bar {
-    width: 350px;
+    width: 100%;
     font-size: 1.1em;
     padding: 8px 45px 8px 16px;
     border-radius: 20px;
@@ -1196,8 +1192,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 .search-bar:focus {
-    outline: 2px solid var(--loading-accent);
-    outline-offset: -2px;
+    outline: none;
 }
 
 .search-bar:focus + .search-icon {
@@ -1206,6 +1201,10 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 
 .search-container:has(.search-bar:focus) {
     transform: scale(1.05);
+}
+
+.search-container:has(.search-bar:focus)::after {
+    box-shadow: inset 0 0 0 2px var(--loading-accent);
 }
 
 .search-icon {
@@ -1281,7 +1280,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 .main {
     display: flex;
     justify-content: space-between;
-    margin-top: 0; /* pull boxes up so tabs sit flush on top */
+    margin-top: 0; /* boxes start flush at the top-bar bottom; the tab bar overlaps their top edge from inside the header */
     gap: 15px;
     box-sizing: border-box;
     flex: 1;
@@ -1305,19 +1304,27 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     background: var(--bg-white);
     border: 1px solid var(--border-gray);
     width: calc(70% - 7.5px);
-    border-top-left-radius: 0;
+    border-top-left-radius: 0; /* square the corner so the active tab merges with the box */
     position: relative;
-    z-index: 2; /* lift box above tabs */
+    z-index: 5; /* above unselected tabs (1-3) so the box border overlays them; below active tab (6) */
 }
 .box.right {
     background: var(--bg-white);
     border: 1px solid var(--border-gray);
     width: calc(30% - 7.5px);
-    padding: 32px 0 0 0;
+    padding: 32px 0 32px 0; /* match top and bottom so the list doesn't run to the box edge */
     position: relative;
     z-index: 1;
 }
-.box-add-button {
+/* ============================================
+   Icon buttons (32px square, transparent, centered)
+   Shared by: box-add, ingredient-menu, product-edit, product-delete
+   ============================================ */
+.icon-button,
+.box-add-button,
+.ingredient-menu-button,
+.product-delete-button,
+.product-edit-button {
     background: transparent;
     border: none;
     width: 32px;
@@ -1328,11 +1335,37 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     justify-content: center;
     transition: all 0.2s ease;
     padding: 0;
+}
+
+.icon-button:hover,
+.box-add-button:hover,
+.ingredient-menu-button:hover,
+.product-delete-button:hover,
+.product-edit-button:hover {
+    transform: scale(1.1);
     border-radius: 4px;
 }
 
-.box-add-button:hover {
-    transform: scale(1.1);
+/* Per-button overrides (exact original values) */
+.box-add-button {
+    border-radius: 4px;
+}
+
+.ingredient-menu-button {
+    border-radius: 4px;
+}
+
+.ingredient-menu-button:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+}
+
+.product-delete-button {
+    margin: 0;
+}
+
+.product-edit-button {
+    margin: 0;
 }
 
 /* Custom plus icon */
@@ -1973,6 +2006,26 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     background: #c62828 !important;
 }
 
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+    20%, 40%, 60%, 80% { transform: translateX(10px); }
+}
+
+.modal-content.shake {
+    animation: shake 0.6s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake-bar {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(calc(-50% - 10px)) scale(1); }
+    20%, 40%, 60%, 80% { transform: translateX(calc(-50% + 10px)) scale(1); }
+}
+
+.batch-confirm-bar.shake {
+    animation: shake-bar 0.6s cubic-bezier(.36,.07,.19,.97) both;
+}
+
 .info-modal-backdrop,
 .themed-confirmation-modal-backdrop {
     background: rgba(0, 0, 0, 0.5);
@@ -2087,19 +2140,28 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 .phone-connect-modal {
-    width: min(360px, calc(100% - 32px));
+    width: min(420px, calc(100% - 32px));
     padding: 28px;
     text-align: center;
 }
 
 .phone-connect-modal h3 {
-    margin-bottom: 20px;
+    margin-bottom: 8px;
+}
+
+.phone-connect-hint {
+    margin: 0 0 18px;
+    color: var(--text-gray);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    text-align: center;
 }
 
 .phone-connect-qr {
-    display: grid;
-    grid-template-columns: repeat(29, 1fr);
-    width: min(240px, 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(340px, 100%);
     aspect-ratio: 1;
     margin: 0 auto;
     padding: 12px;
@@ -2109,12 +2171,47 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     border-radius: 6px;
 }
 
-.qr-cell {
-    background: transparent;
+.phone-connect-qr svg {
+    display: block;
+    width: min(320px, 100%);
+    height: auto;
+    aspect-ratio: 1;
 }
 
-.qr-cell.filled {
-    background: #111111;
+.phone-connect-status {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+    color: var(--text-gray);
+    background: var(--bg-light-gray);
+    border: 1px solid var(--border-light-gray);
+    word-break: break-word;
+}
+
+.phone-connect-status.error {
+    color: var(--color-danger-dark);
+    background: var(--color-danger-light);
+    border-color: var(--color-danger);
+}
+
+.phone-connect-status.info {
+    color: var(--color-info-dark);
+    background: var(--color-info-light);
+    border-color: var(--color-info);
+}
+
+.phone-connect-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.phone-connect-actions .modal-button {
+    padding: 8px 18px;
+    font-size: var(--font-size-sm);
 }
 
 .form-group {
@@ -2131,7 +2228,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 .form-group input[type="text"],
 .form-group input[type="date"],
 .form-group input[type="number"],
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--border-gray);
@@ -2140,10 +2238,13 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     box-sizing: border-box;
     transition: border-color 0.2s ease;
     background: var(--bg-white);
+    font-family: inherit;
+    resize: vertical;
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: var(--loading-accent);
 }
@@ -2188,8 +2289,9 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     padding: 12px;
     margin-bottom: 12px;
     background: var(--bg-light-gray);
-    border-radius: 6px;
-    border-left: 4px solid var(--loading-accent);
+    border-radius: 0 8px 8px 0; /* Match the accent-bar pattern */
+    position: relative; /* Anchor for the accent bar */
+    overflow: hidden; /* Clip the accent bar's rounded nibs flush to the square left corner */
 }
 
 .selected-ingredient-info {
@@ -2303,6 +2405,93 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     color: var(--color-white);
 }
 
+/* Batch-edit event memo prompt (products tab) */
+.batch-memo-hint {
+    margin: -12px 0 18px 0;
+    color: var(--text-gray);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+/* Floating batched-edit confirm bar (products tab) */
+.batch-confirm-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) scale(0.9);
+    transform-origin: bottom center;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px 10px 20px;
+    background: var(--bg-white);
+    border: 1px solid var(--border-light-gray);
+    border-radius: 12px;
+    box-shadow: 0 6px 24px var(--shadow-dark);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: calc(100vw - 48px);
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0.22s ease;
+}
+
+.batch-confirm-bar.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) scale(1);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s ease;
+}
+
+.batch-confirm-bar .batch-confirm-count {
+    color: var(--text-gray);
+    font-weight: 600;
+}
+
+.batch-confirm-bar .batch-confirm-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.batch-confirm-button {
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.batch-confirm-button.apply {
+    background: var(--color-success);
+    color: var(--color-white);
+}
+
+.batch-confirm-button.apply:hover {
+    background: #218838;
+}
+
+.batch-confirm-button.cancel {
+    background: transparent;
+    color: var(--text-gray);
+    border: 1px solid var(--border-light-gray);
+}
+
+.batch-confirm-button.cancel:hover {
+    background: var(--bg-lighter-gray);
+}
+
+.batch-confirm-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .modal-button:disabled {
     opacity: 0.6 !important;
     cursor: not-allowed !important;
@@ -2360,7 +2549,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 
 /* Ingredients container styling */
 .ingredients-container {
-    height: calc(100% - 32px);
+    flex: 1; /* fill the box above the total-cost footer */
+    min-height: 0; /* allow it to shrink so the footer stays visible */
     overflow-y: auto;
     padding: 0;
     width: 100%;
@@ -2373,7 +2563,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     flex-direction: column;
     gap: 20px;
     width: 100%;
-    padding: 0 24px 100px 24px;
+    padding: 0 24px 24px 24px; /* footer is in-flow now, so no need for large bottom padding */
     box-sizing: border-box;
 }
 
@@ -2387,18 +2577,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     position: relative;
 }
 
-/* Create rounded left border using pseudo-element */
-.ingredient-item::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: var(--loading-accent);
-    border-radius: 8px 0 0 8px; /* Match the 8px radius used on the right side */
-}
-
 .ingredient-item.flagged {
     background: var(--color-danger-light);
 }
@@ -2408,7 +2586,7 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 .ingredient-item:last-child {
-    margin-bottom: 60px;
+    margin-bottom: 24px; /* breathing room at the end of the scroll list */
 }
 
 .product-list {
@@ -2435,17 +2613,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     background: var(--bg-light-gray);
 }
 
-.product-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 4px;
-    border-radius: 8px 0 0 8px;
-    background: var(--loading-accent);
-}
-
 .product-image-placeholder {
     display: flex;
     align-items: center;
@@ -2458,6 +2625,64 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     color: var(--text-gray);
     font-size: var(--font-size-sm);
     font-weight: 600;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+/* The product photo renders on its own layer so it can be blurred
+   independently, exactly covering the placeholder box. */
+.product-image-placeholder::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image: var(--product-image);
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+    pointer-events: none;
+}
+
+.product-image-placeholder.has-image::before {
+    opacity: 1;
+}
+
+.product-image-placeholder:hover::before {
+    filter: blur(4px);
+}
+
+.product-image-placeholder.has-image {
+    border-color: transparent;
+}
+
+.product-image-placeholder.has-image .image-placeholder-text {
+    display: none;
+}
+
+.product-image-placeholder .image-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.product-image-placeholder .image-overlay img {
+    width: 22px;
+    height: 22px;
+    filter: invert(1) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+.product-image-placeholder:hover .image-overlay,
+.product-image-placeholder:active .image-overlay,
+.product-image-placeholder:focus-visible .image-overlay {
+    opacity: 1;
 }
 
 .product-card-name {
@@ -2567,56 +2792,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     border: 1px solid var(--border-gray);
 }
 
-/* Legacy ingredient flag button styles - now using dropdown menu */
-/*
-.ingredient-flag-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-}
-
-.ingredient-flag-button:hover {
-    transform: scale(1.1);
-    background: rgba(255, 193, 7, 0.1);
-    border-radius: 4px;
-}
-
-.flag-icon {
-    position: relative;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.flag-icon svg {
-    width: 100%;
-    height: 100%;
-    fill: #666;
-    transition: fill 0.2s ease;
-}
-
-.ingredient-flag-button.flagged .flag-icon svg {
-    fill: #d32f2f;
-}
-
-.ingredient-flag-button:hover .flag-icon svg {
-    fill: #444;
-}
-
-.ingredient-flag-button.flagged:hover .flag-icon svg {
-    fill: #b71c1c;
-}
-*/
-
 /* Ingredient actions container */
 .ingredient-actions {
     position: absolute;
@@ -2637,25 +2812,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 /* 3-dot menu button */
-.ingredient-menu-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-    border-radius: 4px;
-}
-
-.ingredient-menu-button:hover {
-    background: rgba(0, 0, 0, 0.1);
-    transform: scale(1.05);
-}
-
 .ingredient-menu-button.active {
     background: rgba(0, 123, 255, 0.1);
 }
@@ -2700,7 +2856,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 }
 
 /* Add arrow indicator for dropdown */
-.ingredient-menu::before {
+.ingredient-menu::before,
+.google-drive-menu::before {
     content: '';
     position: absolute;
     top: -6px;
@@ -2712,7 +2869,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     border-bottom: 6px solid #ddd;
 }
 
-.ingredient-menu::after {
+.ingredient-menu::after,
+.google-drive-menu::after {
     content: '';
     position: absolute;
     top: -5px;
@@ -2745,7 +2903,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     color: #dc3545;
 }
 
-.ingredient-menu-item .menu-icon {
+.ingredient-menu-item .menu-icon,
+.google-drive-menu-item .menu-icon {
     width: 16px;
     height: 16px;
     filter: opacity(0.7);
@@ -2754,10 +2913,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 
 .ingredient-menu-item.danger .menu-icon {
     filter: opacity(0.7) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
-}
-
-.ingredient-menu-item:hover .menu-icon {
-    filter: opacity(1);
 }
 
 .ingredient-menu-item.danger:hover .menu-icon {
@@ -2814,65 +2969,6 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     }
 }
 
-/* Legacy ingredient flag button - now using dropdown menu */
-/*
-.ingredient-flag-button {
-    position: static;
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-}
-*/
-
-/* Delete button styling - legacy (now using dropdown menu) */
-/*
-.ingredient-delete-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-}
-
-.ingredient-delete-button:hover {
-    transform: scale(1.1);
-    background: rgba(255, 0, 0, 0.1);
-    border-radius: 4px;
-}
-
-.delete-icon {
-    position: relative;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.delete-icon img {
-    width: 100%;
-    height: 100%;
-    filter: opacity(0.6);
-    transition: filter 0.2s ease;
-}
-
-.ingredient-delete-button:hover .delete-icon img {
-    filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
-}
-*/
-
 /* Product actions column styling */
 .inventory-table td.product-actions {
     text-align: center;
@@ -2891,24 +2987,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     padding: 0;
 }
 
-.product-delete-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-    margin: 0;
-}
-
 .product-delete-button:hover {
-    transform: scale(1.1);
     background: rgba(255, 0, 0, 0.1);
-    border-radius: 4px;
 }
 
 .product-delete-button .delete-icon img {
@@ -2922,68 +3002,9 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     filter: opacity(1) sepia(1) saturate(5) hue-rotate(0deg) brightness(0.8) contrast(1.2);
 }
 
-/* Edit button styling - legacy (now using dropdown menu) */
-/*
-.ingredient-edit-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-    margin-right: 4px;
-}
-
-.ingredient-edit-button:hover {
-    transform: scale(1.1);
-    background: rgba(0, 123, 255, 0.1);
-    border-radius: 4px;
-}
-
-.edit-icon {
-    position: relative;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.edit-icon img {
-    width: 100%;
-    height: 100%;
-    filter: opacity(0.6);
-    transition: filter 0.2s ease;
-}
-
-.ingredient-edit-button:hover .edit-icon img {
-    filter: opacity(1) sepia(1) saturate(5) hue-rotate(200deg) brightness(1) contrast(1.2);
-}
-*/
-
 /* Product edit button styling */
-.product-edit-button {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    padding: 0;
-    margin: 0;
-}
-
 .product-edit-button:hover {
-    transform: scale(1.1);
     background: rgba(0, 123, 255, 0.1);
-    border-radius: 4px;
 }
 
 .product-edit-button .edit-icon img {
@@ -3000,8 +3021,8 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 /* Selected ingredient in edit mode styling */
 .ingredient-option.selected-in-edit {
     background: rgba(0, 123, 255, 0.05);
-    border-left: 3px solid #007bff;
-    padding-left: calc(12px - 3px); /* Maintain alignment */
+    position: relative; /* Anchor for the accent bar */
+    overflow: hidden; /* Clip the accent bar's rounded nibs flush to the rounded corner */
 }
 
 .ingredient-option.selected-in-edit:hover {
@@ -3089,11 +3110,10 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 
 /* Fixed bottom section for total cost */
 .ingredients-total-fixed {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    flex-shrink: 0; /* keep it from being squeezed by the scroll container */
+    width: 100%;
     height: 80px;
+    margin-bottom: -32px; /* offset the box's bottom padding so the footer stays flush with the box edge */
     background: var(--bg-lighter-gray);
     border-top: 2px solid var(--loading-accent);
     display: none; /* Hidden by default - only shown when a product is selected */
@@ -3115,9 +3135,12 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
 
 /* Right box content styling */
 #rightBoxContent {
-    height: calc(100% - 0px);
-    overflow-y: auto;
-    margin-top: 0px;
+    /* Fills .ingredients-container; the container owns the scroll so the
+       scroll viewport ends above the total-cost footer (no clipping). */
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 #rightBoxContent h3 {
@@ -3345,6 +3368,26 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     line-height: 1.5;
 }
 
+/* Error / retry button inside empty-state messages (theme-aware) */
+.empty-state-message .error-state-retry {
+    padding: 10px 20px;
+    background: var(--color-danger);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: var(--spacing-lg);
+    font-size: var(--font-size-base);
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.empty-state-message .error-state-retry:hover {
+    background: var(--color-danger-dark);
+    transform: scale(1.03);
+}
+.empty-state-message .error-state-retry:active {
+    transform: scale(0.97);
+}
+
 /* Update Section Styles */
 .setting-section {
     margin-bottom: 30px;
@@ -3568,14 +3611,18 @@ html[data-theme="dark"] .google-drive-menu-item:hover .menu-icon {
     background-color: var(--color-lighter);
 }
 
-.context-menu-item .menu-icon {
+.context-menu-item .menu-icon,
+.ingredient-menu-item .menu-icon,
+.google-drive-menu-item .menu-icon {
     width: 16px;
     height: 16px;
     filter: opacity(0.7);
     flex-shrink: 0;
 }
 
-.context-menu-item:hover .menu-icon {
+.context-menu-item:hover .menu-icon,
+.ingredient-menu-item:hover .menu-icon,
+.google-drive-menu-item:hover .menu-icon {
     filter: opacity(1);
 }
 
@@ -3776,26 +3823,6 @@ html[data-theme="dark"] body {
     background: var(--bg-primary);
 }
 
-html[data-theme="dark"] .tab {
-    color: #aab6c9;
-    border-color: var(--border-gray);
-    background: linear-gradient(to bottom, #161c26, #0f141f);
-}
-
-html[data-theme="dark"] .tab.active {
-    background: var(--bg-white);
-    color: #ffffff;
-    border-color: var(--border-gray);
-}
-
-html[data-theme="dark"] .tab:hover:not(.active) {
-    background: linear-gradient(to bottom, #141a24, #0f141f);
-}
-
-html[data-theme="dark"] .tab.active:hover {
-    background: var(--bg-white);
-}
-
 html[data-theme="dark"] .box,
 html[data-theme="dark"] .box.left,
 html[data-theme="dark"] .box.right {
@@ -3836,18 +3863,25 @@ html[data-theme="dark"] .context-menu {
 }
 
 html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
-html[data-theme="dark"] select {
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
     color: var(--text-primary);
     border-color: var(--border-gray);
 }
 
 html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not(.search-bar),
-html[data-theme="dark"] select {
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
     background: var(--bg-light-gray);
 }
 
 html[data-theme="dark"] input::placeholder {
     color: rgba(170, 182, 201, 0.7);
+}
+
+/* Native date input calendar icon is black by default; invert for dark theme visibility */
+html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
 }
 
 html[data-theme="dark"] .ingredient-menu,
@@ -3857,11 +3891,13 @@ html[data-theme="dark"] .ingredient-menu.show {
     color: var(--text-primary);
 }
 
-html[data-theme="dark"] .ingredient-menu::before {
+html[data-theme="dark"] .ingredient-menu::before,
+html[data-theme="dark"] .google-drive-menu::before {
     border-bottom-color: var(--border-gray);
 }
 
-html[data-theme="dark"] .ingredient-menu::after {
+html[data-theme="dark"] .ingredient-menu::after,
+html[data-theme="dark"] .google-drive-menu::after {
     border-bottom-color: var(--bg-white);
 }
 
@@ -3892,9 +3928,46 @@ html[data-theme="dark"] .product-group-header {
     color: #ffffff;
 }
 
+/* Flagged ingredient/product highlighting on dark theme */
+/* Solid colors (not rgba) so background:inherit on .ingredient-actions doesn't compound into a darker patch */
+html[data-theme="dark"] .ingredient-item.flagged {
+    background: #3a1620;
+}
+
+html[data-theme="dark"] .ingredient-item.flagged .label,
+html[data-theme="dark"] .ingredient-item.flagged .value,
+html[data-theme="dark"] .ingredient-item.flagged strong {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .inventory-table tbody tr.flagged-product {
+    background-color: #3a1620;
+}
+
+html[data-theme="dark"] .inventory-table tbody tr.flagged-product:hover {
+    background-color: #4a1b28;
+}
+
+html[data-theme="dark"] .inventory-table tbody tr.flagged-product.selected-product {
+    background-color: #552030;
+    border-left-color: #ff6b6b !important;
+}
+
 html[data-theme="dark"] .event-group-header:hover,
 html[data-theme="dark"] .product-group-header:hover {
     background: #172033;
+}
+
+html[data-theme="dark"] .phone-connect-status.error {
+    color: #ffb3bd;
+    background: #3a1620;
+    border-color: #721c24;
+}
+
+html[data-theme="dark"] .phone-connect-status.info {
+    color: #a8d8e6;
+    background: #0f2a30;
+    border-color: #0c5460;
 }
 
 html[data-theme="dark"] .group-arrow,
@@ -3987,14 +4060,6 @@ html[data-theme="dark"] .box-add-button:hover .plus-icon svg {
 html[data-theme="dark"] .flag-icon svg {
     fill: #ffffff;
 }
-html[data-theme="dark"] .ingredient-flag-button:hover .flag-icon svg {
-    fill: #e7eef9;
-}
-
-/* Ensure flagged items retain their distinct look if needed */
-html[data-theme="dark"] .ingredient-flag-button.flagged .flag-icon svg {
-    fill: #ff4444;
-}
 
 html[data-theme="dark"] .search-icon img,
 html[data-theme="dark"] .dots-icon,
@@ -4003,8 +4068,7 @@ html[data-theme="dark"] .context-menu-item img,
 html[data-theme="dark"] .group-action-btn img,
 html[data-theme="dark"] .amount-button .amount-icon img,
 html[data-theme="dark"] .edit-icon img,
-html[data-theme="dark"] .delete-icon img,
-html[data-theme="dark"] .param-title-icon img {
+html[data-theme="dark"] .delete-icon img {
     filter: brightness(0) invert(1);
 }
 
@@ -4100,4 +4164,144 @@ html[data-theme="dark"] .creation-modal::-webkit-scrollbar-track {
 
 html[data-theme="dark"] .creation-modal::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   Toast Notification System
+   ----------------------------------------------
+   Bottom-right stacked toasts with a coloured
+   left accent bar (matches group-header pattern).
+   ============================================ */
+.notification-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column; /* oldest at top, newest at bottom */
+    justify-content: flex-end; /* keep the stack anchored to the bottom edge */
+    gap: 10px;
+    pointer-events: none; /* let clicks pass through gaps */
+    max-height: calc(100vh - 40px);
+    overflow: hidden;
+}
+
+.notification-item {
+    display: flex;
+    align-items: stretch;
+    min-width: 280px;
+    max-width: 380px;
+    background: #f0f0f0;
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+    pointer-events: auto;
+    position: relative;
+    opacity: 0;
+    transform: translateX(110%);
+    will-change: transform, opacity;
+}
+
+.notification-accent {
+    flex-shrink: 0;
+    width: 5px;
+}
+
+.notification-body {
+    flex: 1;
+    padding: 12px 8px 12px 14px;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.notification-close {
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 32px;
+    padding-top: 8px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--text-gray);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+
+.notification-close:hover {
+    opacity: 1;
+}
+
+/* ---- Type variants ---- */
+.notification-success .notification-accent {
+    background: var(--color-success);
+}
+.notification-success {
+    background: #e6f4ea;
+}
+
+.notification-error .notification-accent {
+    background: var(--color-danger);
+}
+.notification-error {
+    background: #fdecea;
+}
+
+/* ---- Enter animation (slide in from right) ---- */
+.notification-enter {
+    animation: notificationSlideIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes notificationSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateX(110%);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ---- Exit animation (slide out to right) ---- */
+.notification-exit {
+    animation: notificationSlideOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+@keyframes notificationSlideOut {
+    0% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(110%);
+    }
+}
+
+/* ---- Dark theme ---- */
+html[data-theme="dark"] .notification-item {
+    background: #1a2230;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="dark"] .notification-body {
+    color: #d0d8e8;
+}
+
+html[data-theme="dark"] .notification-close {
+    color: #8a95a9;
+}
+
+html[data-theme="dark"] .notification-success {
+    background: #0f2a18;
+}
+
+html[data-theme="dark"] .notification-error {
+    background: #3a1620;
 }
